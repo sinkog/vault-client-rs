@@ -1,0 +1,21 @@
+--- crates/vault-client-rs/src/types/error.rs
++++ replace <impl From<FromUtf8Error> for VaultError>::from -> Self with Default::default()
+@@ -59,17 +59,17 @@
+ impl From<serde_json::Error> for VaultError {
+     fn from(err: serde_json::Error) -> Self {
+         Self::Deserialize(err)
+     }
+ }
+ 
+ impl From<FromUtf8Error> for VaultError {
+     fn from(err: FromUtf8Error) -> Self {
+-        Self::Config(format!("invalid UTF-8: {err}"))
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl From<ParseIntError> for VaultError {
+     fn from(err: ParseIntError) -> Self {
+         Self::Config(format!("integer parse error: {err}"))
+     }
+ }

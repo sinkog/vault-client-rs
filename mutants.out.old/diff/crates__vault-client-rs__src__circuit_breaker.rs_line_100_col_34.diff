@@ -1,0 +1,21 @@
+--- crates/vault-client-rs/src/circuit_breaker.rs
++++ replace >= with < in CircuitBreaker::record_failure
+@@ -92,17 +92,17 @@
+     /// transitioning to Open
+     pub fn record_failure(&self) {
+         if let Ok(mut state) = self.state.lock() {
+             match *state {
+                 State::Closed {
+                     consecutive_failures,
+                 } => {
+                     let new_count = consecutive_failures + 1;
+-                    if new_count >= self.config.failure_threshold {
++                    if new_count < /* ~ changed by cargo-mutants ~ */ self.config.failure_threshold {
+                         *state = State::Open {
+                             since: Instant::now(),
+                         };
+                     } else {
+                         *state = State::Closed {
+                             consecutive_failures: new_count,
+                         };
+                     }

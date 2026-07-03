@@ -1,0 +1,20 @@
+--- crates/vault-client-rs/src/types/error.rs
++++ delete match arm Self::NotFound{..} in VaultError::status_code
+@@ -97,16 +97,16 @@
+     }
+ 
+     #[must_use]
+     pub fn status_code(&self) -> Option<u16> {
+         match self {
+             Self::Api { status, .. } => Some(*status),
+             Self::AuthRequired => Some(401),
+             Self::PermissionDenied { .. } => Some(403),
+-            Self::NotFound { .. } => Some(404),
++             /* ~ changed by cargo-mutants ~ */
+             Self::RateLimited { .. } => Some(429),
+             Self::ConsistencyRetry => Some(412),
+             Self::Sealed { .. } => Some(503),
+             _ => None,
+         }
+     }
+ }

@@ -1,0 +1,18 @@
+crates/vault-client-rs/src/types/error.rs:86:9: replace VaultError::is_retryable -> bool with true
+crates/vault-client-rs/src/types/error.rs:86:9: replace VaultError::is_retryable -> bool with false
+crates/vault-client-rs/src/types/error.rs:87:13: delete match arm Self::Http(e) in VaultError::is_retryable
+crates/vault-client-rs/src/types/error.rs:88:13: delete match arm Self::Sealed{..} | Self::RateLimited{..} | Self::ConsistencyRetry in VaultError::is_retryable
+crates/vault-client-rs/src/types/error.rs:89:13: delete match arm Self::Api{status, ..} in VaultError::is_retryable
+crates/vault-client-rs/src/types/error.rs:87:45: replace || with && in VaultError::is_retryable
+crates/vault-client-rs/src/types/error.rs:96:9: replace VaultError::is_auth_error -> bool with true
+crates/vault-client-rs/src/types/error.rs:96:9: replace VaultError::is_auth_error -> bool with false
+crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with None
+crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with Some(0)
+crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with Some(1)
+crates/vault-client-rs/src/types/error.rs:102:13: delete match arm Self::Api{status, ..} in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:103:13: delete match arm Self::AuthRequired in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:104:13: delete match arm Self::PermissionDenied{..} in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:105:13: delete match arm Self::NotFound{..} in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:106:13: delete match arm Self::RateLimited{..} in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:107:13: delete match arm Self::ConsistencyRetry in VaultError::status_code
+crates/vault-client-rs/src/types/error.rs:108:13: delete match arm Self::Sealed{..} in VaultError::status_code

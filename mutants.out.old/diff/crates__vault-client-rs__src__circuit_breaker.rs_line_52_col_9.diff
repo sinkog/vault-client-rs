@@ -1,0 +1,48 @@
+--- crates/vault-client-rs/src/circuit_breaker.rs
++++ replace CircuitBreaker::check -> Result<(), VaultError> with Ok(())
+@@ -44,44 +44,17 @@
+                 consecutive_failures: 0,
+             }),
+         }
+     }
+ 
+     /// Returns `Ok(())` if a request may proceed, or
+     /// `Err(VaultError::CircuitOpen)` if the circuit is open
+     pub fn check(&self) -> Result<(), VaultError> {
+-        let mut state = self.state.lock().map_err(|_| VaultError::LockPoisoned)?;
+-        match *state {
+-            State::Closed { .. } => Ok(()),
+-            State::Open { since } => {
+-                if since.elapsed() >= self.config.reset_timeout {
+-                    *state = State::HalfOpen {
+-                        since: Instant::now(),
+-                    };
+-                    Ok(())
+-                } else {
+-                    Err(VaultError::CircuitOpen)
+-                }
+-            }
+-            State::HalfOpen { since } => {
+-                // Only one probe at a time; subsequent requests while half-open are
+-                // rejected until the probe completes. If the probe itself never
+-                // resolves (e.g. its future was cancelled before recording a result),
+-                // allow a fresh probe after `reset_timeout` instead of staying stuck
+-                if since.elapsed() >= self.config.reset_timeout {
+-                    *state = State::HalfOpen {
+-                        since: Instant::now(),
+-                    };
+-                    Ok(())
+-                } else {
+-                    Err(VaultError::CircuitOpen)
+-                }
+-            }
+-        }
++        Ok(()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Record a successful response, resetting the circuit to Closed
+     pub fn record_success(&self) {
+         if let Ok(mut state) = self.state.lock() {
+             *state = State::Closed {
+                 consecutive_failures: 0,
+             };

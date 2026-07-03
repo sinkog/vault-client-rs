@@ -73,6 +73,27 @@ deny: up ## Supply-chain gate (cargo-deny: advisories/licenses/bans/sources)
 
 check: fmt-check lint deny test ## Full merge gate: fmt + clippy + supply-chain + tests
 
+# --- Mutation testing ---------------------------------------------------------
+
+# Scope a mutation run to specific files (override: make mutate MUTANTS_FILES="-f src/renewal.rs").
+# Default targets the logic-bearing modules; the passive type modules and the
+# blocking mirror carry no branching worth mutating.
+MUTANTS_FILES ?= -f crates/vault-client-rs/src/circuit_breaker.rs -f crates/vault-client-rs/src/types/error.rs
+
+mutants-install: up ## Install cargo-mutants into the cache volume
+	$(EXEC) cargo install --locked cargo-mutants
+
+# cargo-mutants must NOT share the main CARGO_TARGET_DIR: it builds mutated
+# copies of the crate, and a leftover mutant artifact would poison the cache
+# used by fmt/lint/test/coverage. Give it a dedicated target dir.
+EXEC_MUTATE := $(DC) exec -T -e CARGO_TARGET_DIR=/target/mutants rust-builder
+
+mutate: up ## Mutation testing (cargo-mutants; fails on surviving mutants) — scoped by MUTANTS_FILES
+	$(EXEC_MUTATE) cargo mutants --no-shuffle --all-features --test-tool nextest $(MUTANTS_FILES) -- -E 'not binary(integration)'
+
+mutate-all: up ## Mutation testing across the whole workspace (slow; runs all tests incl. Vault integration)
+	$(EXEC_MUTATE) cargo mutants --all-features --test-tool nextest --workspace
+
 # --- Release ------------------------------------------------------------------
 
 release: up ## Build reproducible release artifacts (--locked)

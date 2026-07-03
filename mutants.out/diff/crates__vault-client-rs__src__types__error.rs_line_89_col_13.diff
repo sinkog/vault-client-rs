@@ -1,0 +1,21 @@
+--- crates/vault-client-rs/src/types/error.rs
++++ delete match arm Self::Api{status, ..} in VaultError::is_retryable
+@@ -81,17 +81,17 @@
+ }
+ 
+ impl VaultError {
+     #[must_use]
+     pub fn is_retryable(&self) -> bool {
+         match self {
+             Self::Http(e) => e.is_timeout() || e.is_connect(),
+             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,
+-            Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),
++             /* ~ changed by cargo-mutants ~ */
+             _ => false,
+         }
+     }
+ 
+     #[must_use]
+     pub fn is_auth_error(&self) -> bool {
+         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)
+     }

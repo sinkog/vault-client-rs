@@ -32,6 +32,10 @@ tokio-util = { version = "0.7", features = ["rt"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }
+# Used only to construct a real transport-level error for VaultError::Http
+# coverage/mutation tests. Mirrors the main dependency's TLS backend so no
+# extra (e.g. OpenSSL) crates enter the graph.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 wiremock = "0.6"
 proptest = "1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

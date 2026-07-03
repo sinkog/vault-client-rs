@@ -1,0 +1,706 @@
+[
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace <impl From<serde_json::Error> for VaultError>::from -> Self with Default::default()\n@@ -53,17 +53,17 @@\n         mount: String,\n         path: String,\n         field: String,\n     },\n }\n \n impl From<serde_json::Error> for VaultError {\n     fn from(err: serde_json::Error) -> Self {\n-        Self::Deserialize(err)\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl From<FromUtf8Error> for VaultError {\n     fn from(err: FromUtf8Error) -> Self {\n         Self::Config(format!(\"invalid UTF-8: {err}\"))\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "<impl From<serde_json::Error> for VaultError>::from",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 62
+        },
+        "start": {
+          "column": 5,
+          "line": 60
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:61:9: replace <impl From<serde_json::Error> for VaultError>::from -> Self with Default::default()",
+    "package": "vault-client-rs",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 61
+      },
+      "start": {
+        "column": 9,
+        "line": 61
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace <impl From<FromUtf8Error> for VaultError>::from -> Self with Default::default()\n@@ -59,17 +59,17 @@\n impl From<serde_json::Error> for VaultError {\n     fn from(err: serde_json::Error) -> Self {\n         Self::Deserialize(err)\n     }\n }\n \n impl From<FromUtf8Error> for VaultError {\n     fn from(err: FromUtf8Error) -> Self {\n-        Self::Config(format!(\"invalid UTF-8: {err}\"))\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl From<ParseIntError> for VaultError {\n     fn from(err: ParseIntError) -> Self {\n         Self::Config(format!(\"integer parse error: {err}\"))\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "<impl From<FromUtf8Error> for VaultError>::from",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 68
+        },
+        "start": {
+          "column": 5,
+          "line": 66
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:67:9: replace <impl From<FromUtf8Error> for VaultError>::from -> Self with Default::default()",
+    "package": "vault-client-rs",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 54,
+        "line": 67
+      },
+      "start": {
+        "column": 9,
+        "line": 67
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace <impl From<ParseIntError> for VaultError>::from -> Self with Default::default()\n@@ -65,17 +65,17 @@\n impl From<FromUtf8Error> for VaultError {\n     fn from(err: FromUtf8Error) -> Self {\n         Self::Config(format!(\"invalid UTF-8: {err}\"))\n     }\n }\n \n impl From<ParseIntError> for VaultError {\n     fn from(err: ParseIntError) -> Self {\n-        Self::Config(format!(\"integer parse error: {err}\"))\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl From<ParseFloatError> for VaultError {\n     fn from(err: ParseFloatError) -> Self {\n         Self::Config(format!(\"float parse error: {err}\"))\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "<impl From<ParseIntError> for VaultError>::from",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 74
+        },
+        "start": {
+          "column": 5,
+          "line": 72
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:73:9: replace <impl From<ParseIntError> for VaultError>::from -> Self with Default::default()",
+    "package": "vault-client-rs",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 60,
+        "line": 73
+      },
+      "start": {
+        "column": 9,
+        "line": 73
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace <impl From<ParseFloatError> for VaultError>::from -> Self with Default::default()\n@@ -71,17 +71,17 @@\n impl From<ParseIntError> for VaultError {\n     fn from(err: ParseIntError) -> Self {\n         Self::Config(format!(\"integer parse error: {err}\"))\n     }\n }\n \n impl From<ParseFloatError> for VaultError {\n     fn from(err: ParseFloatError) -> Self {\n-        Self::Config(format!(\"float parse error: {err}\"))\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n         match self {\n             Self::Http(e) => e.is_timeout() || e.is_connect(),\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "<impl From<ParseFloatError> for VaultError>::from",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 80
+        },
+        "start": {
+          "column": 5,
+          "line": 78
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:79:9: replace <impl From<ParseFloatError> for VaultError>::from -> Self with Default::default()",
+    "package": "vault-client-rs",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 58,
+        "line": 79
+      },
+      "start": {
+        "column": 9,
+        "line": 79
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::is_retryable -> bool with true\n@@ -78,22 +78,17 @@\n     fn from(err: ParseFloatError) -> Self {\n         Self::Config(format!(\"float parse error: {err}\"))\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n-        match self {\n-            Self::Http(e) => e.is_timeout() || e.is_connect(),\n-            Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n-            Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n-            _ => false,\n-        }\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:86:9: replace VaultError::is_retryable -> bool with true",
+    "package": "vault-client-rs",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 91
+      },
+      "start": {
+        "column": 9,
+        "line": 86
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::is_retryable -> bool with false\n@@ -78,22 +78,17 @@\n     fn from(err: ParseFloatError) -> Self {\n         Self::Config(format!(\"float parse error: {err}\"))\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n-        match self {\n-            Self::Http(e) => e.is_timeout() || e.is_connect(),\n-            Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n-            Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n-            _ => false,\n-        }\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:86:9: replace VaultError::is_retryable -> bool with false",
+    "package": "vault-client-rs",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 91
+      },
+      "start": {
+        "column": 9,
+        "line": 86
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::Http(e) in VaultError::is_retryable\n@@ -79,17 +79,17 @@\n         Self::Config(format!(\"float parse error: {err}\"))\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n         match self {\n-            Self::Http(e) => e.is_timeout() || e.is_connect(),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:87:13: delete match arm Self::Http(e) in VaultError::is_retryable",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 63,
+        "line": 87
+      },
+      "start": {
+        "column": 13,
+        "line": 87
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::Sealed{..} | Self::RateLimited{..} | Self::ConsistencyRetry in VaultError::is_retryable\n@@ -80,17 +80,17 @@\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n         match self {\n             Self::Http(e) => e.is_timeout() || e.is_connect(),\n-            Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n+             /* ~ changed by cargo-mutants ~ */\n             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:88:13: delete match arm Self::Sealed{..} | Self::RateLimited{..} | Self::ConsistencyRetry in VaultError::is_retryable",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 93,
+        "line": 88
+      },
+      "start": {
+        "column": 13,
+        "line": 88
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::Api{status, ..} in VaultError::is_retryable\n@@ -81,17 +81,17 @@\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n         match self {\n             Self::Http(e) => e.is_timeout() || e.is_connect(),\n             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n-            Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n+             /* ~ changed by cargo-mutants ~ */\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:89:13: delete match arm Self::Api{status, ..} in VaultError::is_retryable",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 81,
+        "line": 89
+      },
+      "start": {
+        "column": 13,
+        "line": 89
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace || with && in VaultError::is_retryable\n@@ -79,17 +79,17 @@\n         Self::Config(format!(\"float parse error: {err}\"))\n     }\n }\n \n impl VaultError {\n     #[must_use]\n     pub fn is_retryable(&self) -> bool {\n         match self {\n-            Self::Http(e) => e.is_timeout() || e.is_connect(),\n+            Self::Http(e) => e.is_timeout() && /* ~ changed by cargo-mutants ~ */ e.is_connect(),\n             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_retryable",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 84
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/vault-client-rs/src/types/error.rs:87:45: replace || with && in VaultError::is_retryable",
+    "package": "vault-client-rs",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 47,
+        "line": 87
+      },
+      "start": {
+        "column": 45,
+        "line": 87
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::is_auth_error -> bool with true\n@@ -88,17 +88,17 @@\n             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n-        matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_auth_error",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 97
+        },
+        "start": {
+          "column": 5,
+          "line": 94
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:96:9: replace VaultError::is_auth_error -> bool with true",
+    "package": "vault-client-rs",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 75,
+        "line": 96
+      },
+      "start": {
+        "column": 9,
+        "line": 96
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::is_auth_error -> bool with false\n@@ -88,17 +88,17 @@\n             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,\n             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),\n             _ => false,\n         }\n     }\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n-        matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::is_auth_error",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 97
+        },
+        "start": {
+          "column": 5,
+          "line": 94
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:96:9: replace VaultError::is_auth_error -> bool with false",
+    "package": "vault-client-rs",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 75,
+        "line": 96
+      },
+      "start": {
+        "column": 9,
+        "line": 96
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::status_code -> Option<u16> with None\n@@ -93,20 +93,11 @@\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n-        match self {\n-            Self::Api { status, .. } => Some(*status),\n-            Self::AuthRequired => Some(401),\n-            Self::PermissionDenied { .. } => Some(403),\n-            Self::NotFound { .. } => Some(404),\n-            Self::RateLimited { .. } => Some(429),\n-            Self::ConsistencyRetry => Some(412),\n-            Self::Sealed { .. } => Some(503),\n-            _ => None,\n-        }\n+        None /* ~ changed by cargo-mutants ~ */\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with None",
+    "package": "vault-client-rs",
+    "replacement": "None",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 110
+      },
+      "start": {
+        "column": 9,
+        "line": 101
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::status_code -> Option<u16> with Some(0)\n@@ -93,20 +93,11 @@\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n-        match self {\n-            Self::Api { status, .. } => Some(*status),\n-            Self::AuthRequired => Some(401),\n-            Self::PermissionDenied { .. } => Some(403),\n-            Self::NotFound { .. } => Some(404),\n-            Self::RateLimited { .. } => Some(429),\n-            Self::ConsistencyRetry => Some(412),\n-            Self::Sealed { .. } => Some(503),\n-            _ => None,\n-        }\n+        Some(0) /* ~ changed by cargo-mutants ~ */\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with Some(0)",
+    "package": "vault-client-rs",
+    "replacement": "Some(0)",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 110
+      },
+      "start": {
+        "column": 9,
+        "line": 101
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ replace VaultError::status_code -> Option<u16> with Some(1)\n@@ -93,20 +93,11 @@\n \n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n-        match self {\n-            Self::Api { status, .. } => Some(*status),\n-            Self::AuthRequired => Some(401),\n-            Self::PermissionDenied { .. } => Some(403),\n-            Self::NotFound { .. } => Some(404),\n-            Self::RateLimited { .. } => Some(429),\n-            Self::ConsistencyRetry => Some(412),\n-            Self::Sealed { .. } => Some(503),\n-            _ => None,\n-        }\n+        Some(1) /* ~ changed by cargo-mutants ~ */\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/vault-client-rs/src/types/error.rs:101:9: replace VaultError::status_code -> Option<u16> with Some(1)",
+    "package": "vault-client-rs",
+    "replacement": "Some(1)",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 110
+      },
+      "start": {
+        "column": 9,
+        "line": 101
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::Api{status, ..} in VaultError::status_code\n@@ -94,17 +94,17 @@\n     #[must_use]\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n-            Self::Api { status, .. } => Some(*status),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n             Self::NotFound { .. } => Some(404),\n             Self::RateLimited { .. } => Some(429),\n             Self::ConsistencyRetry => Some(412),\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:102:13: delete match arm Self::Api{status, ..} in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 55,
+        "line": 102
+      },
+      "start": {
+        "column": 13,
+        "line": 102
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::AuthRequired in VaultError::status_code\n@@ -95,17 +95,17 @@\n     pub fn is_auth_error(&self) -> bool {\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n-            Self::AuthRequired => Some(401),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::PermissionDenied { .. } => Some(403),\n             Self::NotFound { .. } => Some(404),\n             Self::RateLimited { .. } => Some(429),\n             Self::ConsistencyRetry => Some(412),\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n     }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:103:13: delete match arm Self::AuthRequired in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 45,
+        "line": 103
+      },
+      "start": {
+        "column": 13,
+        "line": 103
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::PermissionDenied{..} in VaultError::status_code\n@@ -96,17 +96,17 @@\n         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n-            Self::PermissionDenied { .. } => Some(403),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::NotFound { .. } => Some(404),\n             Self::RateLimited { .. } => Some(429),\n             Self::ConsistencyRetry => Some(412),\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:104:13: delete match arm Self::PermissionDenied{..} in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 56,
+        "line": 104
+      },
+      "start": {
+        "column": 13,
+        "line": 104
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::NotFound{..} in VaultError::status_code\n@@ -97,16 +97,16 @@\n     }\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n-            Self::NotFound { .. } => Some(404),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::RateLimited { .. } => Some(429),\n             Self::ConsistencyRetry => Some(412),\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:105:13: delete match arm Self::NotFound{..} in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 48,
+        "line": 105
+      },
+      "start": {
+        "column": 13,
+        "line": 105
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::RateLimited{..} in VaultError::status_code\n@@ -98,15 +98,15 @@\n \n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n             Self::NotFound { .. } => Some(404),\n-            Self::RateLimited { .. } => Some(429),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::ConsistencyRetry => Some(412),\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:106:13: delete match arm Self::RateLimited{..} in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 106
+      },
+      "start": {
+        "column": 13,
+        "line": 106
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::ConsistencyRetry in VaultError::status_code\n@@ -99,14 +99,14 @@\n     #[must_use]\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n             Self::NotFound { .. } => Some(404),\n             Self::RateLimited { .. } => Some(429),\n-            Self::ConsistencyRetry => Some(412),\n+             /* ~ changed by cargo-mutants ~ */\n             Self::Sealed { .. } => Some(503),\n             _ => None,\n         }\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:107:13: delete match arm Self::ConsistencyRetry in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 49,
+        "line": 107
+      },
+      "start": {
+        "column": 13,
+        "line": 107
+      }
+    }
+  },
+  {
+    "diff": "--- crates/vault-client-rs/src/types/error.rs\n+++ delete match arm Self::Sealed{..} in VaultError::status_code\n@@ -100,13 +100,13 @@\n     pub fn status_code(&self) -> Option<u16> {\n         match self {\n             Self::Api { status, .. } => Some(*status),\n             Self::AuthRequired => Some(401),\n             Self::PermissionDenied { .. } => Some(403),\n             Self::NotFound { .. } => Some(404),\n             Self::RateLimited { .. } => Some(429),\n             Self::ConsistencyRetry => Some(412),\n-            Self::Sealed { .. } => Some(503),\n+             /* ~ changed by cargo-mutants ~ */\n             _ => None,\n         }\n     }\n }\n",
+    "file": "crates/vault-client-rs/src/types/error.rs",
+    "function": {
+      "function_name": "VaultError::status_code",
+      "return_type": "-> Option<u16>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 111
+        },
+        "start": {
+          "column": 5,
+          "line": 99
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "crates/vault-client-rs/src/types/error.rs:108:13: delete match arm Self::Sealed{..} in VaultError::status_code",
+    "package": "vault-client-rs",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 46,
+        "line": 108
+      },
+      "start": {
+        "column": 13,
+        "line": 108
+      }
+    }
+  }
+]

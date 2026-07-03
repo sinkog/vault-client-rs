@@ -1,0 +1,21 @@
+--- crates/vault-client-rs/src/types/error.rs
++++ replace || with && in VaultError::is_retryable
+@@ -79,17 +79,17 @@
+         Self::Config(format!("float parse error: {err}"))
+     }
+ }
+ 
+ impl VaultError {
+     #[must_use]
+     pub fn is_retryable(&self) -> bool {
+         match self {
+-            Self::Http(e) => e.is_timeout() || e.is_connect(),
++            Self::Http(e) => e.is_timeout() && /* ~ changed by cargo-mutants ~ */ e.is_connect(),
+             Self::Sealed { .. } | Self::RateLimited { .. } | Self::ConsistencyRetry => true,
+             Self::Api { status, .. } => matches!(status, 500 | 502 | 503 | 504),
+             _ => false,
+         }
+     }
+ 
+     #[must_use]
+     pub fn is_auth_error(&self) -> bool {

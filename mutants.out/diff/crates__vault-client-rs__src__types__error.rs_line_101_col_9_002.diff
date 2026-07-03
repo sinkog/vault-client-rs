@@ -1,0 +1,24 @@
+--- crates/vault-client-rs/src/types/error.rs
++++ replace VaultError::status_code -> Option<u16> with Some(1)
+@@ -93,20 +93,11 @@
+ 
+     #[must_use]
+     pub fn is_auth_error(&self) -> bool {
+         matches!(self, Self::PermissionDenied { .. } | Self::AuthRequired)
+     }
+ 
+     #[must_use]
+     pub fn status_code(&self) -> Option<u16> {
+-        match self {
+-            Self::Api { status, .. } => Some(*status),
+-            Self::AuthRequired => Some(401),
+-            Self::PermissionDenied { .. } => Some(403),
+-            Self::NotFound { .. } => Some(404),
+-            Self::RateLimited { .. } => Some(429),
+-            Self::ConsistencyRetry => Some(412),
+-            Self::Sealed { .. } => Some(503),
+-            _ => None,
+-        }
++        Some(1) /* ~ changed by cargo-mutants ~ */
+     }
+ }
