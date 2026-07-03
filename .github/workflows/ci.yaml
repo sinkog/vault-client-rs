@@ -162,3 +162,33 @@ jobs:
           cargo llvm-cov nextest --all-features --workspace \
             --ignore-filename-regex '(blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs)' \
             --fail-under-lines 90
+
+  mutation:
+    name: Mutation (cargo-mutants)
+    # Mutation testing is too slow for every push — gate it on PRs only, like
+    # the coverage floor it complements. Scoped to the logic-bearing modules
+    # (kept in sync with the Makefile's MUTANTS_FILES); the integration binary
+    # is excluded so no Vault service is needed.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # cargo-mutants builds mutated copies of the crate; a mutation can trip an
+      # otherwise-harmless warning, so don't let -D warnings turn those caught
+      # mutants into "unviable" build failures.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants,nextest
+
+      - name: Mutation — circuit_breaker + error (no surviving mutants)
+        run: |
+          cargo mutants --no-shuffle --all-features --test-tool nextest \
+            -f crates/vault-client-rs/src/circuit_breaker.rs \
+            -f crates/vault-client-rs/src/types/error.rs \
+            -- -E 'not binary(integration)'
