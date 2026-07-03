@@ -19,6 +19,7 @@ mod pki_test;
 mod rabbitmq_mongo_terraform_test;
 mod radius_kerberos_test;
 mod redaction_test;
+mod response_redaction_test;
 mod ssh_test;
 mod sys_test;
 mod totp_consul_nomad_test;
