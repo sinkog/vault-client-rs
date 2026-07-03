@@ -1,0 +1,61 @@
+---
+# Dev/build stack for vault-client-rs. `rust-builder` is a long-running
+# container you `exec` into (via the Makefile) for cargo fmt/clippy/nextest/
+# llvm-cov/deny; `vault` is a dev-mode Vault the integration tests hit.
+#
+# Image digests — pinned to linux/amd64 manifests for hermetic, reproducible
+# builds. To re-pin:
+#   docker manifest inspect <image>:<tag> \
+#     | jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest'
+# rust:1.94-bookworm     linux/amd64  sha256:4ec71e955e6c08aeb238885083222ddff79d82eb87654a96c76e38e94da1a53b
+# hashicorp/vault:1.18   linux/amd64  sha256:bf35d0701422e5cb33ba982f3930f3cc44f798ebd7b442d8af64336a9f9fcbbd
+x-rust-version: &rust_image rust:1.94-bookworm@sha256:4ec71e955e6c08aeb238885083222ddff79d82eb87654a96c76e38e94da1a53b
+x-vault-version: &vault_image hashicorp/vault:1.18@sha256:bf35d0701422e5cb33ba982f3930f3cc44f798ebd7b442d8af64336a9f9fcbbd
+
+services:
+  # Long-running Rust build/lint/test toolchain. Source is mounted read-write so
+  # cargo can manage Cargo.lock (this repo gitignores the lockfile and
+  # regenerates it); the target dir and cargo home (registry + installed tools
+  # like cargo-nextest) live in named cache volumes that persist across
+  # container restarts. rustfmt/clippy come from the pinned rust-toolchain.toml.
+  rust-builder:
+    image: *rust_image
+    container_name: vault-rust-builder
+    depends_on:
+      - vault
+    volumes:
+      - ./:/git-source
+      - cargo-home:/cargo
+      - cargo-target:/target
+    environment:
+      - CARGO_HOME=/cargo
+      - CARGO_TARGET_DIR=/target
+      - CARGO_TERM_COLOR=never
+      # Point integration tests at the dev-mode Vault service on the compose net.
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=myroot
+    working_dir: /git-source
+    stdin_open: true
+    tty: true
+    entrypoint: ["sh"]
+
+  # Dev-mode Vault for the integration test suite (mirrors the CI service).
+  vault:
+    image: *vault_image
+    container_name: vault-dev
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=myroot
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  cargo-home:
+  cargo-target:

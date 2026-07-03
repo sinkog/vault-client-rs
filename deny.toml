@@ -1,0 +1,40 @@
+# cargo-deny configuration — the Rust supply-chain gate. Complements the
+# `rustsec/audit-check` job in CI with license, duplicate, and source policy.
+
+[advisories]
+# Fail on any known vulnerability in the dependency graph.
+version = 2
+yanked = "deny"
+
+[licenses]
+# Allowlist of licenses acceptable for dependencies. The workspace itself is
+# `Apache-2.0 OR MIT`; permissive licenses only. The list is seeded from the
+# actual dependency tree (reqwest/rustls, ring, etc.) — extend deliberately.
+version = 2
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    # webpki-roots ships the Mozilla CA set (via reqwest/rustls) under CDLA.
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Reproducibility hygiene: flag accidental duplicate versions of a crate and
+# wildcard version requirements. Internal path dev-dependencies (the
+# vault-client-rs-test helper crate) are intentionally version-less, so allow
+# wildcard requirements that resolve to a path.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# Only crates.io is a trusted source; unknown registries/git sources fail.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

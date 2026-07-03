@@ -1,0 +1,8 @@
+# Pinned Rust toolchain — the single source of truth for the version used by the
+# rust-builder container, CI, and local developers alike (rustup honours this).
+# `channel` is the workspace MSRV (Cargo.toml `rust-version`); bump the two in
+# lockstep with the rust image digest in docker-compose.yml.
+[toolchain]
+channel = "1.94"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]
+profile = "minimal"
