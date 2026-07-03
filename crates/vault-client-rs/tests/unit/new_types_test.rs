@@ -287,7 +287,7 @@ fn pki_acme_config_roundtrip() {
     };
     let json = serde_json::to_value(&config).unwrap();
     let roundtripped: PkiAcmeConfig = serde_json::from_value(json).unwrap();
-    assert_eq!(roundtripped.enabled, true);
+    assert!(roundtripped.enabled);
     assert_eq!(roundtripped.allowed_issuers, vec!["issuer-1", "issuer-2"]);
     assert_eq!(roundtripped.allowed_roles, vec!["role-a"]);
     assert_eq!(

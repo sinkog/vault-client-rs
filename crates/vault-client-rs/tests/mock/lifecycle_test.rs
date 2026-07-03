@@ -247,9 +247,7 @@ async fn concurrent_requests_near_expiry_share_one_renewal() {
     // Seeds a short-lived, renewable token
     Mock::given(method("POST"))
         .and(path("/v1/auth/token/renew-self"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.seed", 2)),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.seed", 2)))
         .up_to_n_times(1)
         .mount(&server)
         .await;

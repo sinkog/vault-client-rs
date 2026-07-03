@@ -280,9 +280,9 @@ async fn delete_root() {
 
     // After deleting root, issuers should be empty (or listing should fail)
     let result = pki.list_issuers().await;
-    match result {
-        Ok(list) => assert!(list.is_empty()),
-        Err(_) => {} // NotFound is also acceptable
+    // A NotFound error is also acceptable here.
+    if let Ok(list) = result {
+        assert!(list.is_empty());
     }
 
     client.sys().unmount(&mount).await.unwrap();

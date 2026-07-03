@@ -4,7 +4,9 @@ use std::time::Duration;
 use proptest::prelude::*;
 use vault_client_rs::types::error::VaultError;
 use vault_client_rs::types::secret::{MountPath, SecretPath};
-use vault_client_rs::{AuthInfo, KvReadResponse, RedactionLevel, VaultResponse, set_redaction_level};
+use vault_client_rs::{
+    AuthInfo, KvReadResponse, RedactionLevel, VaultResponse, set_redaction_level,
+};
 
 // ---------------------------------------------------------------------------
 // MountPath validation

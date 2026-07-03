@@ -213,7 +213,8 @@ async fn stuck_half_open_probe_self_heals() {
         .mount(&server)
         .await;
 
-    let probe = client.kv1("secret").read::<HashMap<String, String>>("test");
+    let kv = client.kv1("secret");
+    let probe = kv.read::<HashMap<String, String>>("test");
     let cancelled = tokio::time::timeout(Duration::from_millis(50), probe).await;
     assert!(
         cancelled.is_err(),
