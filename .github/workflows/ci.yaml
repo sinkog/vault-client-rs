@@ -12,6 +12,8 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/**"
+      - "deny.toml"
+      - "rust-toolchain.toml"
   pull_request: {}
 
 env:
@@ -99,3 +101,64 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  deny:
+    name: Supply chain (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+
+    services:
+      vault:
+        image: hashicorp/vault:1.18
+        ports:
+          - 8200:8200
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: myroot
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+
+    env:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: myroot
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,nextest
+
+      - name: Wait for Vault to become ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8200/v1/sys/health; then
+              echo "Vault is ready"
+              exit 0
+            fi
+            echo "Waiting for Vault... ($i/30)"
+            sleep 1
+          done
+          echo "Vault failed to start. Container logs:"
+          docker logs ${{ job.services.vault.id }}
+          exit 1
+
+      # Line-coverage quality gate. The blocking mirror (a mechanical
+      # sync-over-async copy of the async API) and sys/mod.rs trait-delegation
+      # boilerplate are excluded; the remaining, meaningful code must stay at or
+      # above 90% lines. Keep the regex and floor in sync with the Makefile.
+      - name: Coverage (fail under 90% lines)
+        run: |
+          cargo llvm-cov nextest --all-features --workspace \
+            --ignore-filename-regex '(blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs)' \
+            --fail-under-lines 90
