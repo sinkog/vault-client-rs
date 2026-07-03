@@ -3,6 +3,7 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::common::build_test_client;
+use vault_client_rs::VaultError;
 use vault_client_rs::types::sys::*;
 
 #[tokio::test]
@@ -196,6 +197,53 @@ async fn raft_remove_peer() {
 
     let client = build_test_client(&server).await;
     client.sys().raft_remove_peer("node1").await.unwrap();
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_success() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    client
+        .sys()
+        .raft_snapshot_restore(b"fake snapshot bytes")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_error() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "errors": ["invalid snapshot"]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let err = client
+        .sys()
+        .raft_snapshot_restore(b"corrupt")
+        .await
+        .unwrap_err();
+    match err {
+        VaultError::Api { status, errors } => {
+            assert_eq!(status, 400);
+            assert_eq!(errors, vec!["invalid snapshot".to_string()]);
+        }
+        other => panic!("expected VaultError::Api, got {other:?}"),
+    }
 }
 
 #[tokio::test]

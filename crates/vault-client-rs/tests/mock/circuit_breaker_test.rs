@@ -169,6 +169,76 @@ async fn failed_probe_sends_circuit_back_to_open() {
 }
 
 #[tokio::test]
+async fn stuck_half_open_probe_self_heals() {
+    let server = MockServer::start().await;
+
+    // Always fail initially to trip the circuit
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+            "errors": ["internal error"]
+        })))
+        .up_to_n_times(2)
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .token_str("test-token")
+        .max_retries(0)
+        .circuit_breaker(CircuitBreakerConfig {
+            failure_threshold: 2,
+            reset_timeout: Duration::from_millis(100),
+        })
+        .build()
+        .unwrap();
+
+    // Trip the circuit
+    for _ in 0..2 {
+        let _ = client.kv1("secret").read::<serde_json::Value>("test").await;
+    }
+
+    // Wait for reset timeout — the next check() moves Open -> HalfOpen
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    // The probe response is slow; cancel the caller's future before it resolves,
+    // so neither record_success nor record_failure ever runs for this probe
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_secs(5))
+                .set_body_json(serde_json::json!({"data": {"key": "value"}})),
+        )
+        .mount(&server)
+        .await;
+
+    let probe = client.kv1("secret").read::<HashMap<String, String>>("test");
+    let cancelled = tokio::time::timeout(Duration::from_millis(50), probe).await;
+    assert!(
+        cancelled.is_err(),
+        "probe should have been cancelled by the timeout before completing"
+    );
+
+    // Without the fix, the circuit stays HalfOpen forever and every subsequent
+    // request is rejected. Wait past reset_timeout again and confirm a fresh
+    // probe is let through instead.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "key": "value" }
+        })))
+        .mount(&server)
+        .await;
+
+    let data: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+    assert_eq!(data["key"], "value");
+}
+
+#[tokio::test]
 async fn success_resets_failure_counter() {
     let server = MockServer::start().await;
 

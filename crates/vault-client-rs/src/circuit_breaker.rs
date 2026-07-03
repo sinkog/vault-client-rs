@@ -28,7 +28,7 @@ impl Default for CircuitBreakerConfig {
 enum State {
     Closed { consecutive_failures: u32 },
     Open { since: Instant },
-    HalfOpen,
+    HalfOpen { since: Instant },
 }
 
 pub(crate) struct CircuitBreaker {
@@ -54,16 +54,27 @@ impl CircuitBreaker {
             State::Closed { .. } => Ok(()),
             State::Open { since } => {
                 if since.elapsed() >= self.config.reset_timeout {
-                    *state = State::HalfOpen;
+                    *state = State::HalfOpen {
+                        since: Instant::now(),
+                    };
                     Ok(())
                 } else {
                     Err(VaultError::CircuitOpen)
                 }
             }
-            State::HalfOpen => {
-                // Only one probe at a time; subsequent requests while
-                // half-open are rejected until the probe completes
-                Err(VaultError::CircuitOpen)
+            State::HalfOpen { since } => {
+                // Only one probe at a time; subsequent requests while half-open are
+                // rejected until the probe completes. If the probe itself never
+                // resolves (e.g. its future was cancelled before recording a result),
+                // allow a fresh probe after `reset_timeout` instead of staying stuck
+                if since.elapsed() >= self.config.reset_timeout {
+                    *state = State::HalfOpen {
+                        since: Instant::now(),
+                    };
+                    Ok(())
+                } else {
+                    Err(VaultError::CircuitOpen)
+                }
             }
         }
     }
@@ -96,7 +107,7 @@ impl CircuitBreaker {
                         };
                     }
                 }
-                State::HalfOpen => {
+                State::HalfOpen { .. } => {
                     // Probe failed, back to Open
                     *state = State::Open {
                         since: Instant::now(),

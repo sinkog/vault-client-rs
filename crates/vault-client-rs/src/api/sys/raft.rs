@@ -1,5 +1,6 @@
 use reqwest::Method;
 
+use crate::VaultClient;
 use crate::types::error::VaultError;
 use crate::types::sys::{AutopilotState, RaftConfig};
 
@@ -46,7 +47,19 @@ impl SysHandler<'_> {
             .header("X-Vault-Request", "true")
             .body(snapshot.to_vec());
         let req = self.client.inject_headers(req)?;
-        let _resp: reqwest::Response = req.send().await.map_err(VaultError::Http)?;
-        Ok(())
+        let resp = req.send().await.map_err(VaultError::Http)?;
+        let status = resp.status().as_u16();
+        match status {
+            200..=299 => Ok(()),
+            401 => Err(VaultError::AuthRequired),
+            403 => {
+                let errors = VaultClient::extract_errors(resp).await;
+                Err(VaultError::PermissionDenied { errors })
+            }
+            _ => {
+                let errors = VaultClient::extract_errors(resp).await;
+                Err(VaultError::Api { status, errors })
+            }
+        }
     }
 }

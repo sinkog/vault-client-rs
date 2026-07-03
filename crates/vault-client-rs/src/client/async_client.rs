@@ -62,6 +62,9 @@ pub(crate) struct VaultClientInner {
     pub(crate) auth_method: Option<Arc<dyn AuthMethodDyn>>,
     pub(crate) circuit_breaker: Option<CircuitBreaker>,
     pub(crate) on_token_changed: Option<TokenChangedCallback>,
+    /// Serializes proactive token renewal so concurrent requests near expiry
+    /// don't each fire their own redundant `renew-self` call
+    pub(crate) renewal_lock: tokio::sync::Mutex<()>,
 }
 
 /// Internal token state; fields beyond `value` are populated by
@@ -341,6 +344,7 @@ impl ClientBuilder {
                 auth_method: self.auth_method,
                 circuit_breaker: self.circuit_breaker.map(CircuitBreaker::new),
                 on_token_changed: self.on_token_changed,
+                renewal_lock: tokio::sync::Mutex::new(()),
             }),
             namespace_override: None,
             wrap_ttl_override: None,
@@ -742,8 +746,9 @@ impl VaultClient {
 
     /// Proactively renew or re-authenticate before the token expires
     ///
-    /// Uses a double-check pattern to avoid redundant renewals under contention;
-    /// all lock guards are dropped before any `.await` to keep futures `Send`
+    /// Renewal is serialized via `renewal_lock` and double-checked after acquiring
+    /// it, so concurrent callers near expiry share a single renew-self call instead
+    /// of each firing their own
     async fn ensure_valid_token(&self) -> Result<(), VaultError> {
         enum Action {
             Ok,
@@ -770,31 +775,36 @@ impl VaultClient {
             Action::Ok => Ok(()),
             Action::ReAuth => self.try_re_authenticate().await,
             Action::Renew => {
-                // Double-check under write lock
+                // Serialize renewals across concurrent callers so only one in-flight
+                // renew-self call happens near expiry, instead of a thundering herd
+                let _renewal_guard = self.inner.renewal_lock.lock().await;
+
+                // Re-check now that we hold the renewal lock: another caller may have
+                // already renewed the token while we were waiting for it
                 let still_needed = {
                     let guard = self
                         .inner
                         .token
-                        .write()
+                        .read()
                         .map_err(|_| VaultError::LockPoisoned)?;
                     guard.as_ref().is_some_and(Self::token_needs_renewal)
-                }; // write lock dropped
+                }; // read lock dropped
 
                 if !still_needed {
                     return Ok(());
                 }
 
-                // Renew the current token directly via the Vault API.
-                // All locks are released before this await so the future stays `Send`.
-                // Uses execute_raw to bypass ensure_valid_token and avoid recursion.
-                let raw_resp = self
-                    .execute_raw(Method::POST, "auth/token/renew-self", None)
-                    .await?;
-                let resp: VaultResponse<serde_json::Value> = raw_resp.json().await?;
-                if let Some(auth) = resp.auth {
-                    self.update_token_from_auth(&auth)?;
+                match self.renew_token_via_api().await {
+                    Ok(()) => Ok(()),
+                    Err(renew_err) if self.inner.auth_method.is_some() => {
+                        tracing::warn!(
+                            error = %renew_err,
+                            "proactive token renewal failed, falling back to re-authentication"
+                        );
+                        self.try_re_authenticate().await
+                    }
+                    Err(renew_err) => Err(renew_err),
                 }
-                Ok(())
             }
         }
     }
@@ -809,6 +819,21 @@ impl VaultClient {
             }
             None => Err(VaultError::AuthRequired),
         }
+    }
+
+    /// Renew the client token directly via `auth/token/renew-self`, updating
+    /// internal token state from the response
+    ///
+    /// Uses `execute_raw` to bypass `ensure_valid_token` and avoid recursion
+    pub(crate) async fn renew_token_via_api(&self) -> Result<(), VaultError> {
+        let raw_resp = self
+            .execute_raw(Method::POST, "auth/token/renew-self", None)
+            .await?;
+        let resp: VaultResponse<serde_json::Value> = raw_resp.json().await?;
+        if let Some(auth) = resp.auth {
+            self.update_token_from_auth(&auth)?;
+        }
+        Ok(())
     }
 
     pub(crate) async fn execute(
@@ -1017,7 +1042,7 @@ impl VaultClient {
         unreachable!("retry loop always returns from within")
     }
 
-    async fn extract_errors(resp: Response) -> Vec<String> {
+    pub(crate) async fn extract_errors(resp: Response) -> Vec<String> {
         let body = resp.text().await.unwrap_or_default();
         serde_json::from_str::<serde_json::Value>(&body)
             .ok()

@@ -7,7 +7,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use super::redaction::redact;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 #[non_exhaustive]
 pub struct VaultResponse<T> {
     pub request_id: Option<String>,
@@ -18,6 +18,26 @@ pub struct VaultResponse<T> {
     pub auth: Option<AuthInfo>,
     pub warnings: Option<Vec<String>>,
     pub wrap_info: Option<WrapInfo>,
+}
+
+// `T` is caller-supplied secret payload data (e.g. KV secret contents), so it must go
+// through the same redaction as every other sensitive field rather than a plain derive
+impl<T: fmt::Debug> fmt::Debug for VaultResponse<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VaultResponse")
+            .field("request_id", &self.request_id)
+            .field("lease_id", &self.lease_id)
+            .field("lease_duration", &self.lease_duration)
+            .field("renewable", &self.renewable)
+            .field(
+                "data",
+                &self.data.as_ref().map(|d| redact(&format!("{d:?}"))),
+            )
+            .field("auth", &self.auth)
+            .field("warnings", &self.warnings)
+            .field("wrap_info", &self.wrap_info)
+            .finish()
+    }
 }
 
 #[derive(Deserialize, Zeroize, ZeroizeOnDrop)]

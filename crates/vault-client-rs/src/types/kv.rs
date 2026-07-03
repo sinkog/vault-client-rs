@@ -1,12 +1,26 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Clone)]
+use super::redaction::redact;
+
+#[derive(Deserialize, Clone)]
 #[non_exhaustive]
 pub struct KvReadResponse<T> {
     pub data: T,
     pub metadata: KvMetadata,
+}
+
+// `T` is the caller-supplied secret payload, so it must go through the same
+// redaction as every other sensitive field rather than a plain derive
+impl<T: fmt::Debug> fmt::Debug for KvReadResponse<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KvReadResponse")
+            .field("data", &redact(&format!("{:?}", self.data)))
+            .field("metadata", &self.metadata)
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

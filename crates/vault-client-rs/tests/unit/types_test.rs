@@ -4,7 +4,7 @@ use std::time::Duration;
 use proptest::prelude::*;
 use vault_client_rs::types::error::VaultError;
 use vault_client_rs::types::secret::{MountPath, SecretPath};
-use vault_client_rs::{AuthInfo, VaultResponse};
+use vault_client_rs::{AuthInfo, KvReadResponse, RedactionLevel, VaultResponse, set_redaction_level};
 
 // ---------------------------------------------------------------------------
 // MountPath validation
@@ -298,6 +298,42 @@ fn vault_response_deserialize_without_data() {
     });
     let resp: VaultResponse<serde_json::Value> = serde_json::from_value(json).unwrap();
     assert!(resp.data.is_none());
+}
+
+#[test]
+fn vault_response_debug_redacts_data() {
+    set_redaction_level(RedactionLevel::Full);
+    let json = serde_json::json!({
+        "data": { "password": "hunter2" },
+    });
+    let resp: VaultResponse<HashMap<String, String>> = serde_json::from_value(json).unwrap();
+    let debug = format!("{resp:?}");
+    assert!(!debug.contains("hunter2"));
+    assert!(debug.contains("[REDACTED]"));
+
+    set_redaction_level(RedactionLevel::None);
+    assert!(format!("{resp:?}").contains("hunter2"));
+    set_redaction_level(RedactionLevel::Full);
+}
+
+#[test]
+fn kv_read_response_debug_redacts_data() {
+    set_redaction_level(RedactionLevel::Full);
+    let json = serde_json::json!({
+        "data": { "api_key": "topsecret" },
+        "metadata": {
+            "created_time": "2026-01-01T00:00:00Z",
+            "version": 1,
+        },
+    });
+    let resp: KvReadResponse<HashMap<String, String>> = serde_json::from_value(json).unwrap();
+    let debug = format!("{resp:?}");
+    assert!(!debug.contains("topsecret"));
+    assert!(debug.contains("[REDACTED]"));
+
+    set_redaction_level(RedactionLevel::None);
+    assert!(format!("{resp:?}").contains("topsecret"));
+    set_redaction_level(RedactionLevel::Full);
 }
 
 #[test]

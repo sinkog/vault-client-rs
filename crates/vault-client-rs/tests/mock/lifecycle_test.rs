@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use vault_client_rs::{Kv1Operations, TokenAuthOperations, VaultClient};
+use vault_client_rs::{Kv1Operations, TokenAuthOperations, UserpassLogin, VaultClient};
 
 #[tokio::test]
 async fn ensure_valid_token_skipped_for_auth_endpoints() {
@@ -152,4 +153,152 @@ async fn on_token_changed_fires_on_renewal() {
     let captured = tokens.lock().unwrap();
     assert_eq!(captured.len(), 1);
     assert_eq!(captured[0], "s.new-token");
+}
+
+fn auth_envelope_body(client_token: &str, lease_duration: u64) -> serde_json::Value {
+    serde_json::json!({
+        "auth": {
+            "client_token": client_token,
+            "accessor": "acc",
+            "policies": ["default"],
+            "token_policies": ["default"],
+            "metadata": null,
+            "lease_duration": lease_duration,
+            "renewable": true,
+            "entity_id": "ent-1",
+            "token_type": "service",
+            "orphan": false,
+            "mfa_requirement": null,
+            "num_uses": 0
+        }
+    })
+}
+
+#[tokio::test]
+async fn renewal_failure_falls_back_to_re_authentication() {
+    let server = MockServer::start().await;
+
+    // First login: a short-lived, renewable token
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/userpass/login/alice"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.initial", 2)))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    // Proactive renewal always fails, forcing the re-authentication fallback
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+            "errors": ["permission denied"]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // Fallback re-authentication succeeds with a fresh, long-lived token
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/userpass/login/alice"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.fallback", 3600)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "key": "value" }
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .max_retries(0)
+        .auth_method(UserpassLogin {
+            username: "alice".into(),
+            password: SecretString::from("password"),
+            mount: "userpass".into(),
+        })
+        .build()
+        .unwrap();
+
+    // No token yet: this read logs in fresh, seeding a 2s-lease renewable token
+    let data: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+    assert_eq!(data["key"], "value");
+
+    // Wait until within the renewal threshold (20% of the 2s lease, i.e. 400ms
+    // remaining); comfortable margin either side to avoid flakiness under load
+    tokio::time::sleep(Duration::from_millis(1850)).await;
+
+    // This read triggers proactive renewal, which fails and falls back to
+    // re-authentication instead of propagating the renewal error
+    let data: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+    assert_eq!(data["key"], "value");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_requests_near_expiry_share_one_renewal() {
+    let server = MockServer::start().await;
+
+    // Seeds a short-lived, renewable token
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.seed", 2)),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    // Every concurrent caller near expiry should share this single renewal
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_envelope_body("s.renewed", 3600)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "key": "value" }
+        })))
+        .expect(10)
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .token_str("initial")
+        .max_retries(0)
+        .build()
+        .unwrap();
+
+    // Seed a renewable token with a 2s lease
+    client.auth().token().renew_self(None).await.unwrap();
+
+    // Wait until within the renewal threshold (20% of the 2s lease)
+    tokio::time::sleep(Duration::from_millis(1850)).await;
+
+    // Fire concurrent reads; all should observe "needs renewal" before any of
+    // them actually renews, but only one should reach the network
+    let mut handles = Vec::new();
+    for _ in 0..10 {
+        let client = client.clone();
+        handles.push(tokio::spawn(async move {
+            client
+                .kv1("secret")
+                .read::<HashMap<String, String>>("test")
+                .await
+        }));
+    }
+    for handle in handles {
+        handle.await.unwrap().unwrap();
+    }
 }
