@@ -200,3 +200,108 @@ async fn watch_lease_events_cancels_on_drop() {
     // Give the runtime a chance to process the cancellation
     tokio::task::yield_now().await;
 }
+
+// ---------------------------------------------------------------------------
+// renew_token_now / daemon lifecycle (mutation-hardening)
+// ---------------------------------------------------------------------------
+
+fn auth_renew_body() -> serde_json::Value {
+    serde_json::json!({
+        "auth": {
+            "client_token": "s.renewed",
+            "accessor": "acc-renewed",
+            "policies": ["default"],
+            "token_policies": ["default"],
+            "metadata": null,
+            "lease_duration": 3600,
+            "renewable": true,
+            "entity_id": "ent-1",
+            "token_type": "service",
+            "orphan": false,
+            "mfa_requirement": null,
+            "num_uses": 0
+        }
+    })
+}
+
+#[tokio::test]
+async fn renew_token_now_posts_to_renew_self() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_renew_body()))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    client
+        .renew_token_now()
+        .await
+        .expect("renew_token_now should succeed on a 200");
+}
+
+#[tokio::test]
+async fn renew_token_now_propagates_api_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+            "errors": ["internal error"]
+        })))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    // A 500 must surface as an error — guards `renew_token_now` against being
+    // replaced with an unconditional `Ok(())`.
+    assert!(matches!(
+        client.renew_token_now().await,
+        Err(VaultError::Api { status: 500, .. })
+    ));
+}
+
+#[tokio::test]
+async fn token_renewal_daemon_reports_running() {
+    let server = MockServer::start().await;
+    let client = build_test_client(&server).await;
+
+    let daemon = client.start_token_renewal();
+    // Freshly spawned and sleeping: the background task is running.
+    assert!(daemon.is_running());
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn lease_watcher_try_recv_surfaces_queued_event() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/v1/sys/leases/renew"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "lease_id": "database/creds/role/xyz",
+            "lease_duration": 3600,
+            "renewable": true
+        })))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let mut watcher =
+        client.watch_lease_events("database/creds/role/xyz".to_owned(), Duration::from_secs(1));
+
+    // Poll the non-blocking try_recv until the background task queues an event.
+    // Guards `try_recv` against being replaced with an unconditional `None`.
+    let deadline = tokio::time::Instant::now() + RECV_TIMEOUT;
+    let event = loop {
+        if let Some(e) = watcher.try_recv() {
+            break e;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "try_recv never surfaced an event"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(matches!(event, LeaseEvent::Renewed { .. }));
+    watcher.shutdown().await;
+}

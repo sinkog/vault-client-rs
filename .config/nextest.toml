@@ -3,8 +3,13 @@ fail-fast = false
 failure-output = "final"
 
 # Integration tests hit a single shared Vault node (e.g. running in a container), so they
-# must run sequentially to avoid audit device interference.
+# must run sequentially to avoid audit device interference. `test-threads` is not a valid
+# per-override key (nextest silently ignores it), so serialize them via a test group with
+# a single thread instead.
+[test-groups]
+integration = { max-threads = 1 }
+
 [[profile.default.overrides]]
 filter = "binary(integration)"
-test-threads = 1
+test-group = "integration"
 retries = 3

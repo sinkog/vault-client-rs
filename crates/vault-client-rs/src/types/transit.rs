@@ -338,3 +338,60 @@ pub(crate) struct TransitBatchVerifyResponse {
     #[serde(default)]
     pub batch_results: Vec<TransitBatchVerifyResult>,
 }
+
+#[cfg(test)]
+mod tests {
+    //! In-crate coverage for the redacting `Debug` impls that external tests
+    //! can't reach: the `pub(crate)` wire responses and the non-`Full`
+    //! redaction arm of `TransitExportedKey`. nextest isolates each test in its
+    //! own process, so mutating the global redaction level here is safe.
+    use std::collections::HashMap;
+
+    use secrecy::SecretString;
+
+    use super::{TransitBackupResponse, TransitDecryptResponse, TransitExportedKey};
+    use crate::types::redaction::{RedactionLevel, set_redaction_level};
+
+    #[test]
+    fn decrypt_response_debug_redacts_plaintext() {
+        let resp = TransitDecryptResponse {
+            plaintext: SecretString::from("super-secret-plaintext"),
+        };
+        let debug = format!("{resp:?}");
+        assert!(debug.contains("TransitDecryptResponse"));
+        assert!(!debug.contains("super-secret-plaintext"));
+    }
+
+    #[test]
+    fn backup_response_debug_redacts_backup() {
+        let resp = TransitBackupResponse {
+            backup: SecretString::from("super-secret-backup-blob"),
+        };
+        let debug = format!("{resp:?}");
+        assert!(debug.contains("TransitBackupResponse"));
+        assert!(!debug.contains("super-secret-backup-blob"));
+    }
+
+    #[test]
+    fn exported_key_debug_non_full_arm_redacts_each_key() {
+        let mut keys = HashMap::new();
+        keys.insert(
+            "1".to_string(),
+            SecretString::from("super-secret-key-material"),
+        );
+        let exported = TransitExportedKey {
+            name: "my-key".to_string(),
+            keys,
+            key_type: "aes256-gcm96".to_string(),
+        };
+
+        // Partial redaction takes the non-`Full` match arm, which redacts each
+        // map entry individually rather than summarising.
+        set_redaction_level(RedactionLevel::Partial);
+        let debug = format!("{exported:?}");
+        set_redaction_level(RedactionLevel::Full);
+
+        assert!(debug.contains("TransitExportedKey"));
+        assert!(!debug.contains("super-secret-key-material"));
+    }
+}
