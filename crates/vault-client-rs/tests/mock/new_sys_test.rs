@@ -3,6 +3,7 @@ use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::common::build_test_client;
+use vault_client_rs::VaultError;
 use vault_client_rs::types::sys::*;
 
 #[tokio::test]
@@ -979,4 +980,94 @@ async fn internal_counters_activity() {
         .expect("months should be an array");
     assert_eq!(months.len(), 1);
     assert_eq!(months[0]["counts"]["clients"], 30);
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_success() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    client
+        .sys()
+        .raft_snapshot_restore(b"snapshot-bytes")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_permission_denied() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+            "errors": ["permission denied"]
+        })))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let err = client
+        .sys()
+        .raft_snapshot_restore(b"snapshot-bytes")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, VaultError::PermissionDenied { .. }),
+        "expected PermissionDenied, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_server_error() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+            "errors": ["internal error"]
+        })))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let err = client
+        .sys()
+        .raft_snapshot_restore(b"snapshot-bytes")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, VaultError::Api { status: 500, .. }),
+        "expected Api 500, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn raft_snapshot_restore_sealed() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/sys/storage/raft/snapshot"))
+        .respond_with(ResponseTemplate::new(503).set_body_json(serde_json::json!({
+            "errors": ["Vault is sealed"]
+        })))
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let err = client
+        .sys()
+        .raft_snapshot_restore(b"snapshot-bytes")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, VaultError::Sealed { .. }),
+        "expected Sealed, got: {err}"
+    );
 }

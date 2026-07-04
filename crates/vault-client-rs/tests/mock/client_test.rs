@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::TcpListener;
 use std::time::Duration;
 
 use secrecy::SecretString;
@@ -789,4 +790,30 @@ async fn approle_login_missing_auth_returns_error() {
         matches!(err, VaultError::EmptyResponse),
         "expected EmptyResponse for missing auth, got: {err:?}"
     );
+}
+
+#[tokio::test]
+async fn connect_error_is_http_and_retryable() {
+    // Bind then drop to get a port with nothing listening, so the request fails to connect
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    drop(listener);
+
+    let client = VaultClient::builder()
+        .address(&format!("http://{addr}"))
+        .token_str("test-token")
+        .max_retries(0)
+        .build()
+        .unwrap();
+
+    let err = client
+        .kv2("secret")
+        .read::<serde_json::Value>("key")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, VaultError::Http(_)),
+        "expected Http, got: {err:?}"
+    );
+    assert!(err.is_retryable(), "connect errors must be retryable");
 }

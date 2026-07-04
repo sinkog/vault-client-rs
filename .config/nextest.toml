@@ -4,7 +4,10 @@ failure-output = "final"
 
 # Integration tests hit a single shared Vault node (e.g. running in a container), so they
 # must run sequentially to avoid audit device interference.
+[test-groups.serial-integration]
+max-threads = 1
+
 [[profile.default.overrides]]
 filter = "binary(integration)"
-test-threads = 1
+test-group = "serial-integration"
 retries = 3

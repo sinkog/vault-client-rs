@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use vault_client_rs::{Kv1Operations, TokenAuthOperations, VaultClient};
+use vault_client_rs::{AppRoleLogin, Kv1Operations, TokenAuthOperations, VaultClient};
+use vault_client_rs_test::auth_response;
 
 #[tokio::test]
 async fn ensure_valid_token_skipped_for_auth_endpoints() {
@@ -152,4 +154,110 @@ async fn on_token_changed_fires_on_renewal() {
     let captured = tokens.lock().unwrap();
     assert_eq!(captured.len(), 1);
     assert_eq!(captured[0], "s.new-token");
+}
+
+fn approle_login() -> AppRoleLogin {
+    AppRoleLogin {
+        role_id: "r".into(),
+        secret_id: SecretString::from("s"),
+        mount: "approle".into(),
+    }
+}
+
+#[tokio::test]
+async fn proactive_renewal_is_serialized() {
+    let server = MockServer::start().await;
+
+    // Login yields a short-lived, renewable token
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/approle/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_response("s.initial", 1)))
+        .mount(&server)
+        .await;
+
+    // renew-self yields a long-lived token and must be hit exactly once
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_response("s.renewed", 7200)))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/item"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "k": "v" }
+        })))
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .max_retries(0)
+        .auth_method(approle_login())
+        .build()
+        .unwrap();
+
+    // First request logs in (lease_duration = 1s)
+    let _: HashMap<String, String> = client.kv1("secret").read("item").await.unwrap();
+
+    // Cross the renewal threshold (needs elapsed >= 0.8 * lease)
+    tokio::time::sleep(Duration::from_millis(900)).await;
+
+    // Many concurrent callers near expiry must share a single renew-self call
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let c = client.clone();
+        handles.push(tokio::spawn(async move {
+            let _: HashMap<String, String> = c.kv1("secret").read("item").await.unwrap();
+        }));
+    }
+    for h in handles {
+        h.await.unwrap();
+    }
+    // renew-self `.expect(1)` is verified when the server drops
+}
+
+#[tokio::test]
+async fn proactive_renewal_falls_back_to_reauth() {
+    let server = MockServer::start().await;
+
+    // Every login yields a short-lived token; used both initially and for the fallback
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/approle/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(auth_response("s.fresh", 1)))
+        .mount(&server)
+        .await;
+
+    // renew-self fails, forcing the fallback to re-authentication
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+            "errors": ["permission denied"]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/item"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "k": "v" }
+        })))
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .max_retries(0)
+        .auth_method(approle_login())
+        .build()
+        .unwrap();
+
+    let _: HashMap<String, String> = client.kv1("secret").read("item").await.unwrap();
+    tokio::time::sleep(Duration::from_millis(900)).await;
+
+    // renew-self returns 403; the request still succeeds because re-auth kicks in
+    let data: HashMap<String, String> = client.kv1("secret").read("item").await.unwrap();
+    assert_eq!(data["k"], "v");
 }

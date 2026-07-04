@@ -1,18 +1,27 @@
 use std::future::Future;
 use std::time::Duration;
 
-use reqwest::Method;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::VaultClient;
 use crate::types::error::VaultError;
-use crate::types::response::VaultResponse;
 
 /// Minimum sleep between lease renewal attempts to prevent busy-looping
 /// when Vault returns a zero or very short TTL
 const MIN_RENEWAL_SLEEP: Duration = Duration::from_secs(1);
+
+/// Race a future against cancellation, returning `None` if cancelled first
+///
+/// Lets `shutdown()` and `Drop` interrupt an in-flight call, including its
+/// internal retries, instead of only being observed between sleep cycles
+async fn race_cancel<F: Future>(fut: F, cancel: &CancellationToken) -> Option<F::Output> {
+    tokio::select! {
+        result = fut => Some(result),
+        () = cancel.cancelled() => None,
+    }
+}
 
 /// Handle to a background renewal task, cancelled on drop
 pub struct RenewalDaemon {
@@ -76,12 +85,16 @@ impl VaultClient {
 
                 tokio::select! {
                     () = tokio::time::sleep(sleep_dur) => {
-                        if let Err(e) = client.renew_token_now().await {
-                            tracing::error!(error = %e, "background token renewal failed");
-                            // Try re-authentication as fallback
-                            if let Err(e2) = client.try_re_authenticate().await {
-                                tracing::error!(error = %e2, "re-authentication also failed");
+                        match race_cancel(client.renew_token_now(), &token).await {
+                            Some(Ok(())) => {}
+                            Some(Err(e)) => {
+                                tracing::error!(error = %e, "background token renewal failed");
+                                // Try re-authentication as fallback
+                                if let Some(Err(e2)) = race_cancel(client.try_re_authenticate(), &token).await {
+                                    tracing::error!(error = %e2, "re-authentication also failed");
+                                }
                             }
+                            None => break,
                         }
                     }
                     () = token.cancelled() => break,
@@ -114,15 +127,16 @@ impl VaultClient {
 
                 tokio::select! {
                     () = tokio::time::sleep(sleep_dur) => {
-                        match client.sys().renew_lease(&lease_id, None).await {
-                            Ok(info) => {
+                        match race_cancel(client.sys().renew_lease(&lease_id, None), &token).await {
+                            Some(Ok(info)) => {
                                 current_ttl = Duration::from_secs(info.lease_duration);
                                 tracing::debug!(lease_id = %lease_id, ttl = ?current_ttl, "lease renewed");
                             }
-                            Err(e) => {
+                            Some(Err(e)) => {
                                 tracing::error!(lease_id = %lease_id, error = %e, "lease renewal failed");
                                 break;
                             }
+                            None => break,
                         }
                     }
                     () = token.cancelled() => break,
@@ -138,14 +152,7 @@ impl VaultClient {
 
     /// Perform an immediate token renewal via POST auth/token/renew-self
     pub async fn renew_token_now(&self) -> Result<(), VaultError> {
-        let raw_resp = self
-            .execute_raw(Method::POST, "auth/token/renew-self", None)
-            .await?;
-        let resp: VaultResponse<serde_json::Value> = raw_resp.json().await?;
-        if let Some(auth) = resp.auth {
-            self.update_token_from_auth(&auth)?;
-        }
-        Ok(())
+        self.renew_token_via_api().await
     }
 
     /// Spawn a background task that watches a lease and emits [`LeaseEvent`]s
@@ -169,15 +176,15 @@ impl VaultClient {
 
                 tokio::select! {
                     () = tokio::time::sleep(sleep_dur) => {
-                        match client.sys().renew_lease(&lease_id, None).await {
-                            Ok(info) => {
+                        match race_cancel(client.sys().renew_lease(&lease_id, None), &token).await {
+                            Some(Ok(info)) => {
                                 current_ttl = Duration::from_secs(info.lease_duration);
                                 let _ = tx.send(LeaseEvent::Renewed {
                                     lease_id: lease_id.clone(),
                                     ttl: current_ttl,
                                 }).await;
                             }
-                            Err(e) => {
+                            Some(Err(e)) => {
                                 let _ = tx.send(LeaseEvent::Error {
                                     lease_id: lease_id.clone(),
                                     error: e.to_string(),
@@ -187,6 +194,7 @@ impl VaultClient {
                                 }).await;
                                 break;
                             }
+                            None => break,
                         }
                     }
                     () = token.cancelled() => break,
@@ -233,7 +241,15 @@ impl VaultClient {
 
                 tokio::select! {
                     () = tokio::time::sleep(sleep_dur) => {
-                        match client.sys().renew_lease(&current_lease, None).await {
+                        let renew_result = match race_cancel(
+                            client.sys().renew_lease(&current_lease, None),
+                            &token,
+                        ).await {
+                            Some(r) => r,
+                            None => break,
+                        };
+
+                        match renew_result {
                             Ok(info) => {
                                 current_ttl = Duration::from_secs(info.lease_duration);
                                 let _ = tx.send(LeaseEvent::Renewed {
@@ -249,13 +265,17 @@ impl VaultClient {
 
                                 // Attempt rotation with retries
                                 let mut rotated = false;
+                                let mut cancelled = false;
                                 for attempt in 0u32..3 {
                                     if attempt > 0 {
                                         let backoff = Duration::from_millis(500 * 2u64.pow(attempt));
-                                        tokio::time::sleep(backoff).await;
+                                        if race_cancel(tokio::time::sleep(backoff), &token).await.is_none() {
+                                            cancelled = true;
+                                            break;
+                                        }
                                     }
-                                    match rotate_fn(client.clone()).await {
-                                        Ok((new_lease, new_ttl)) => {
+                                    match race_cancel(rotate_fn(client.clone()), &token).await {
+                                        Some(Ok((new_lease, new_ttl))) => {
                                             let _ = tx.send(LeaseEvent::Rotated {
                                                 lease_id: new_lease.clone(),
                                             }).await;
@@ -264,14 +284,22 @@ impl VaultClient {
                                             rotated = true;
                                             break;
                                         }
-                                        Err(e) => {
+                                        Some(Err(e)) => {
                                             tracing::warn!(
                                                 attempt = attempt + 1,
                                                 error = %e,
                                                 "rotation attempt failed"
                                             );
                                         }
+                                        None => {
+                                            cancelled = true;
+                                            break;
+                                        }
                                     }
+                                }
+
+                                if cancelled {
+                                    break;
                                 }
 
                                 if !rotated {

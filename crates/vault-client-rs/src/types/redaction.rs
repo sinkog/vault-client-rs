@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,4 +37,9 @@ pub fn redact(value: &str) -> String {
         }
         RedactionLevel::None => value.into(),
     }
+}
+
+/// Render a value's `Debug` through the active redaction level
+pub(crate) fn redacted_debug(value: &impl fmt::Debug) -> String {
+    redact(&format!("{value:?}"))
 }

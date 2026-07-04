@@ -62,6 +62,9 @@ pub(crate) struct VaultClientInner {
     pub(crate) auth_method: Option<Arc<dyn AuthMethodDyn>>,
     pub(crate) circuit_breaker: Option<CircuitBreaker>,
     pub(crate) on_token_changed: Option<TokenChangedCallback>,
+    /// Serializes proactive token renewal so concurrent requests near expiry
+    /// do not each fire their own redundant `renew-self` call
+    pub(crate) renewal_lock: tokio::sync::Mutex<()>,
 }
 
 /// Internal token state; fields beyond `value` are populated by
@@ -341,6 +344,7 @@ impl ClientBuilder {
                 auth_method: self.auth_method,
                 circuit_breaker: self.circuit_breaker.map(CircuitBreaker::new),
                 on_token_changed: self.on_token_changed,
+                renewal_lock: tokio::sync::Mutex::new(()),
             }),
             namespace_override: None,
             wrap_ttl_override: None,
@@ -742,8 +746,8 @@ impl VaultClient {
 
     /// Proactively renew or re-authenticate before the token expires
     ///
-    /// Uses a double-check pattern to avoid redundant renewals under contention;
-    /// all lock guards are dropped before any `.await` to keep futures `Send`
+    /// Renewal is serialized via `renewal_lock` and re-checked under a read lock after
+    /// acquiring it, so concurrent callers near expiry share one `renew-self` call
     async fn ensure_valid_token(&self) -> Result<(), VaultError> {
         enum Action {
             Ok,
@@ -770,33 +774,47 @@ impl VaultClient {
             Action::Ok => Ok(()),
             Action::ReAuth => self.try_re_authenticate().await,
             Action::Renew => {
-                // Double-check under write lock
+                // Bind the guard; `let _ =` would drop it at once and defeat serialization
+                let _guard = self.inner.renewal_lock.lock().await;
+
+                // Another caller may have renewed while we waited for the lock
                 let still_needed = {
                     let guard = self
                         .inner
                         .token
-                        .write()
+                        .read()
                         .map_err(|_| VaultError::LockPoisoned)?;
                     guard.as_ref().is_some_and(Self::token_needs_renewal)
-                }; // write lock dropped
+                };
 
                 if !still_needed {
                     return Ok(());
                 }
 
-                // Renew the current token directly via the Vault API.
-                // All locks are released before this await so the future stays `Send`.
-                // Uses execute_raw to bypass ensure_valid_token and avoid recursion.
-                let raw_resp = self
-                    .execute_raw(Method::POST, "auth/token/renew-self", None)
-                    .await?;
-                let resp: VaultResponse<serde_json::Value> = raw_resp.json().await?;
-                if let Some(auth) = resp.auth {
-                    self.update_token_from_auth(&auth)?;
+                match self.renew_token_via_api().await {
+                    Ok(()) => Ok(()),
+                    Err(e) if self.inner.auth_method.is_some() => {
+                        tracing::warn!(error = %e, "proactive renewal failed, re-authenticating");
+                        self.try_re_authenticate().await
+                    }
+                    Err(e) => Err(e),
                 }
-                Ok(())
             }
         }
+    }
+
+    /// Renew the client token via `auth/token/renew-self`, updating token state
+    ///
+    /// Uses `execute_raw` to bypass `ensure_valid_token` and avoid recursion
+    pub(crate) async fn renew_token_via_api(&self) -> Result<(), VaultError> {
+        let raw_resp = self
+            .execute_raw(Method::POST, "auth/token/renew-self", None)
+            .await?;
+        let resp: VaultResponse<serde_json::Value> = raw_resp.json().await?;
+        if let Some(auth) = resp.auth {
+            self.update_token_from_auth(&auth)?;
+        }
+        Ok(())
     }
 
     /// Attempt re-authentication using the configured auth method
@@ -960,11 +978,11 @@ impl VaultClient {
                     match status {
                         200..=299 | 404 => return Ok(resp),
                         401 => {
-                            return Err(VaultError::AuthRequired);
+                            return Err(Self::error_from_status(status, url, Vec::new()));
                         }
                         403 => {
                             let errors = Self::extract_errors(resp).await;
-                            return Err(VaultError::PermissionDenied { errors });
+                            return Err(Self::error_from_status(status, url, errors));
                         }
                         429 => {
                             let retry_after = resp
@@ -989,9 +1007,7 @@ impl VaultClient {
                             continue;
                         }
                         503 => {
-                            let e = VaultError::Sealed {
-                                url: url.to_string(),
-                            };
+                            let e = Self::error_from_status(status, url, Vec::new());
                             if attempt >= max || !self.inner.config.retry_on_sealed {
                                 return Err(e);
                             }
@@ -999,7 +1015,7 @@ impl VaultClient {
                         }
                         _ => {
                             let errors = Self::extract_errors(resp).await;
-                            let err = VaultError::Api { status, errors };
+                            let err = Self::error_from_status(status, url, errors);
                             if err.is_retryable() && attempt < max {
                                 continue;
                             }
@@ -1017,7 +1033,22 @@ impl VaultClient {
         unreachable!("retry loop always returns from within")
     }
 
-    async fn extract_errors(resp: Response) -> Vec<String> {
+    /// Map a terminal (non-2xx) status to its `VaultError`
+    ///
+    /// Single source of truth for the retry loop and raw request paths; `errors`
+    /// is ignored for statuses that carry none
+    pub(crate) fn error_from_status(status: u16, url: &Url, errors: Vec<String>) -> VaultError {
+        match status {
+            401 => VaultError::AuthRequired,
+            403 => VaultError::PermissionDenied { errors },
+            503 => VaultError::Sealed {
+                url: url.to_string(),
+            },
+            _ => VaultError::Api { status, errors },
+        }
+    }
+
+    pub(crate) async fn extract_errors(resp: Response) -> Vec<String> {
         let body = resp.text().await.unwrap_or_default();
         serde_json::from_str::<serde_json::Value>(&body)
             .ok()

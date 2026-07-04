@@ -200,3 +200,38 @@ async fn watch_lease_events_cancels_on_drop() {
     // Give the runtime a chance to process the cancellation
     tokio::task::yield_now().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_interrupts_in_flight_renewal() {
+    let server = MockServer::start().await;
+
+    // Renewal hangs long enough that shutdown must interrupt it, not wait it out
+    Mock::given(method("PUT"))
+        .and(path("/v1/sys/leases/renew"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({
+                    "lease_id": "l",
+                    "lease_duration": 3600,
+                    "renewable": true
+                }))
+                .set_delay(Duration::from_secs(20)),
+        )
+        .mount(&server)
+        .await;
+
+    let client = build_test_client(&server).await;
+    let watcher = client.watch_lease_events("l".to_owned(), Duration::from_secs(1));
+
+    // Initial sleep is at most 0.66s + 5s jitter, so by 6s the daemon is inside the
+    // delayed renew call
+    tokio::time::sleep(Duration::from_secs(6)).await;
+
+    let start = std::time::Instant::now();
+    watcher.shutdown().await;
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "shutdown should interrupt the in-flight renewal promptly, took {elapsed:?}"
+    );
+}

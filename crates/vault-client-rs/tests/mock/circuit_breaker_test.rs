@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use tokio::time::{sleep, timeout};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -231,4 +232,78 @@ async fn success_resets_failure_counter() {
             "circuit should still be closed"
         );
     }
+}
+
+#[tokio::test]
+async fn circuit_recovers_from_cancelled_half_open_probe() {
+    let server = MockServer::start().await;
+
+    // One failure trips the breaker to Open
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/trip"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+            "errors": ["boom"]
+        })))
+        .mount(&server)
+        .await;
+
+    // The half-open probe hits this and is cancelled mid-flight by a client-side timeout
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/slow"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "data": {} }))
+                .set_delay(Duration::from_millis(500)),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/ok"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "data": {} })))
+        .mount(&server)
+        .await;
+
+    let reset = Duration::from_millis(50);
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .token_str("test-token")
+        .max_retries(0)
+        .circuit_breaker(CircuitBreakerConfig {
+            failure_threshold: 1,
+            reset_timeout: reset,
+        })
+        .build()
+        .unwrap();
+
+    let _ = client
+        .kv1("secret")
+        .read::<HashMap<String, String>>("trip")
+        .await;
+    assert!(matches!(
+        client
+            .kv1("secret")
+            .read::<HashMap<String, String>>("ok")
+            .await
+            .unwrap_err(),
+        VaultError::CircuitOpen
+    ));
+
+    // After reset_timeout, admit a probe then cancel it before it records a result
+    sleep(reset + Duration::from_millis(20)).await;
+    let probe = timeout(
+        Duration::from_millis(20),
+        client.kv1("secret").read::<HashMap<String, String>>("slow"),
+    )
+    .await;
+    assert!(probe.is_err(), "probe should be cancelled by the timeout");
+
+    // The cancelled probe left the breaker half-open; after another reset_timeout a
+    // fresh probe must be admitted and close the breaker
+    sleep(reset + Duration::from_millis(20)).await;
+    client
+        .kv1("secret")
+        .read::<HashMap<String, String>>("ok")
+        .await
+        .expect("breaker must recover from a cancelled probe");
 }

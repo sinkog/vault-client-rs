@@ -279,10 +279,10 @@ async fn delete_root() {
     pki.delete_root().await.unwrap();
 
     // After deleting root, issuers should be empty (or listing should fail)
+    // NotFound is also acceptable, so only the Ok case is asserted
     let result = pki.list_issuers().await;
-    match result {
-        Ok(list) => assert!(list.is_empty()),
-        Err(_) => {} // NotFound is also acceptable
+    if let Ok(list) = result {
+        assert!(list.is_empty());
     }
 
     client.sys().unmount(&mount).await.unwrap();

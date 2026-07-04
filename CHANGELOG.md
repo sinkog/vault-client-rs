@@ -2,7 +2,18 @@
 
 ## 0.9.0 (in development)
 
-No changes yet.
+### Bug Fixes
+
+ * `SysHandler::raft_snapshot_restore` returns a typed error on a non-2xx
+   response instead of reporting success
+ * `VaultResponse<T>` and `KvReadResponse<T>` redact their payload in `Debug`
+   output instead of printing it verbatim
+ * The circuit breaker recovers from a cancelled half-open probe, admitting a
+   fresh probe after `reset_timeout` instead of staying open permanently
+ * Concurrent requests near token expiry share a single `renew-self` call and
+   fall back to re-authentication when renewal fails
+ * `RenewalDaemon` and `LeaseWatcher` shutdown and drop interrupt an in-flight
+   renewal instead of waiting for it to return
 
 
 ## 0.8.0 (Mar 7, 2026)
