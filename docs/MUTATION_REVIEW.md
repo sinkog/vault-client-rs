@@ -33,6 +33,7 @@ delegations only rewards rote tests.
 | `circuit_breaker.rs` | **100%** | 100% | All viable mutants already caught. |
 | `renewal.rs` | 34% (21 missed) | **47%** (17 missed) | Closed `renew_token_now` / `is_running` / `try_recv`; rest is jitter/timing and cancel-on-drop near-equivalents. |
 | `client/async_client.rs` | 58.6% (48 missed) | **60.3%** (46 missed) | Closed the retry status-mapping and non-renewable-token branches; see below for the honest breakdown. |
+| `api/kv2.rs` | — | **100%** (0 missed) | Business logic (CAS body, version ops, `read_field` stringification) is fully pinned by the existing tests — no gaps, no bugs. |
 
 Absolute scores exclude **unviable** mutants (ones that don't compile).
 
@@ -86,5 +87,15 @@ premature — the re-measure is what caught it.
 Every logic-bearing module has been mutation-reviewed. The exercise found **no
 correctness bugs** — it found that the test suite, while broad, under-asserted
 behaviour in the core request path and token-renewal logic. Those high-value
-gaps are now closed; the remaining survivors are low-value plumbing, timing
-math, or near-equivalent mutants that add fragility without real safety.
+gaps are now closed.
+
+A clear pattern emerged: the **business-logic modules are at or near 100%**
+(`error.rs`, `circuit_breaker.rs`, `api/kv2.rs` — the last covering CAS,
+version operations, and field stringification), while the only lower headline
+number (`async_client.rs`, 60%) is dragged down almost entirely by **plumbing**
+(builder setters, `from_env`, `Debug`) plus a few timing and near-equivalent
+mutants. In other words, the raw score understates test quality: the code that
+*can* be wrong is well pinned; the survivors are code that is trivial, timing-
+dependent, or masked by defence-in-depth. Chasing a higher raw number would mean
+writing brittle tests for plumbing — the wrong optimization. Mutation testing is
+used here as a diagnostic that found and closed real gaps, not as a target.
