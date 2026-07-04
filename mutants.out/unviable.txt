@@ -1,4 +1,0 @@
-crates/vault-client-rs/src/types/error.rs:61:9: replace <impl From<serde_json::Error> for VaultError>::from -> Self with Default::default()
-crates/vault-client-rs/src/types/error.rs:67:9: replace <impl From<FromUtf8Error> for VaultError>::from -> Self with Default::default()
-crates/vault-client-rs/src/types/error.rs:73:9: replace <impl From<ParseIntError> for VaultError>::from -> Self with Default::default()
-crates/vault-client-rs/src/types/error.rs:79:9: replace <impl From<ParseFloatError> for VaultError>::from -> Self with Default::default()

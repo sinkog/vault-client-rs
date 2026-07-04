@@ -1,2 +1,0 @@
-crates/vault-client-rs/src/types/error.rs:87:13: delete match arm Self::Http(e) in VaultError::is_retryable
-crates/vault-client-rs/src/types/error.rs:87:45: replace || with && in VaultError::is_retryable

@@ -3,3 +3,7 @@ Cargo.lock
 .DS_Store
 
 scratch/*
+
+# cargo-mutants output
+/mutants.out/
+/mutants.out.old/
