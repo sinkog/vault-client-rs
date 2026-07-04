@@ -5,18 +5,24 @@
 A modern Rust client for [Vault](https://www.hashicorp.com/en/products/vault) targeting
 Rust `1.94+`.
 
+Design notes and proposals live in `~/Development/md/vault-client-rs/` (numbered
+documents plus `vault_client_rs_ergonomics.md`). Read the relevant one before
+making non-trivial changes.
+
 ## Build System
 
-All the standard Cargo commands apply but with one important detail: make sure to add `--all-features` so that
-all feature-gated code (`blocking`, `auto-renew`) is included.
+All the standard Cargo commands apply but with two important details: add `--all-features` so that
+all feature-gated code (`blocking`, `auto-renew`) is included, and `--workspace` so that the
+test utilities crate is covered too.
 
- * `cargo build --all-features` to build
- * `cargo nextest run --all-features` to run tests
- * `cargo clippy --all-features` to lint
+ * `cargo build --workspace --all-features` to build
+ * `cargo nextest run --workspace --all-features` to run tests
+ * `cargo clippy --workspace --all-features --all-targets` to lint (`--all-targets` lints test code, which CI does too)
  * `cargo fmt` to reformat
- * `cargo publish` to publish the crate
 
-Always run `cargo check --all-features` before making changes to verify the codebase compiles cleanly.
+Publishing happens in CI on tag push (see Releases); never run `cargo publish` by hand.
+
+Always run `cargo check --workspace --all-features` before making changes to verify the codebase compiles cleanly.
 If compilation fails, investigate and fix compilation errors before proceeding with any modifications.
 
 
@@ -55,7 +61,17 @@ Tests are consolidated into three test binaries (plus the test utilities crate) 
 
 Each directory has a `main.rs` crate root that declares all modules.
 
-Use `cargo nextest run --profile default --all-features '--' --exact [test module name]` to run
+Never put tests inline in an implementation module under `#[cfg(test)]`. Every
+test lives in one of the three directories above, wired through its `main.rs` for much
+faster builds (linking specifically).
+
+A `pub(crate)` type that an external test cannot name is exercised through the
+public API, not by adding an in-crate test module.
+
+Write tests that exercise behavior. Do not add tests to chase a coverage number.
+Focus on meaningful coverage improvements.
+
+Use `cargo nextest run --profile default --workspace --all-features '--' --exact [test module name]` to run
 all tests in a specific module.
 
 ### Property-based Tests
@@ -63,7 +79,31 @@ all tests in a specific module.
 Property-based tests are written using [proptest](https://docs.rs/proptest/latest/proptest/) and
 use a naming convention: they begin with `prop_`.
 
-To run the property-based tests specifically, use `cargo nextest run --all-features 'prop_'`.
+To run the property-based tests specifically, use `cargo nextest run --workspace --all-features 'prop_'`.
+
+## Rust Code Style
+
+ * Use top-level `use` statements; never a function-local `use`
+ * Prefer a plain `use` import; on a genuine name clash, alias with `use ... as ...`; reach
+   for a fully-qualified path only when nothing else disambiguates
+ * Prefer the type system (generics, traits, newtypes) over macros for reducing duplication.
+   Some duplication is acceptable when the alternative is forced indirection
+ * Tests live under `tests/{mock,unit,integration}/`, never inline under `#[cfg(test)]` in an
+   implementation module
+
+End every task with these, all clean:
+
+ * `cargo fmt`
+ * `RUSTFLAGS="-D warnings" cargo clippy --workspace --all-features --all-targets`
+ * `RUSTFLAGS="-D warnings" cargo nextest run --workspace --all-features`
+
+## Domain Primitives Are Newtypes
+
+Never let a `String` carry a value with a specific domain meaning, e.g. a mount path, secret
+path, token, or engine identifier. Use a validated newtype (see
+`src/types/secret.rs`: `MountPath`, `SecretPath`).
+
+Add a newtype for any new domain primitive rather than a `String` alias.
 
 ## Source of Domain Knowledge
 
@@ -74,6 +114,12 @@ The [Vault HTTP API guide](https://developer.hashicorp.com/vault/api-docs).
 Keep comments short and to the point. Avoid filler words like "This function does X" when the
 function name already says it. Don't add doc comments to obvious methods. Match the existing
 comment density — the codebase is deliberately light on comments.
+
+ * Only add important comments: those that communicate information the code cannot
+ * Prefer a terse comment (ideally one short line) above the line being commented on; reduce the use of multi-line comment blocks
+ * Strictly no trailing comments like `let a = 1; // ...`
+ * No comment references the current task, a fix or review-finding number, or callers
+ * Doc comments (`///`) do not end with a full stop; module-level `//!` comments may
 
 ### Voice
 
@@ -89,6 +135,7 @@ to all prose: design docs, analyses, notes, and commit messages.
 ### Writing and Markdown Style
 
  * Never add full stops to Markdown list items
+ * Use `*` for Markdown list bullets, matching this repo and the other Rust projects
  * Use "X and Y" in prose, not "X / Y" slash-shorthand. Exceptions: unit
    fractions (`bytes/sec`), single-concept abbreviations (`I/O`), and paths
    or code (`tests/unit/`, `src/lib.rs`)
@@ -129,6 +176,7 @@ via Trusted Publishing (OIDC). No manual `cargo publish` needed.
  * Do not commit changes automatically without an explicit permission to do so
  * Never add yourself as a git commit coauthor
  * Never mention yourself in commit messages in any way (no "Generated by", no AI tool links, etc)
+ * Never skip hooks (`--no-verify`) or bypass commit signing unless the user explicitly requests it
 
 ## Iterative Post-Implementation Review (IPIR)
 
@@ -140,4 +188,5 @@ worth adopting to begin with.
 
 Look hard for ways to meaningfully improve both the tests and the implementation.
 
-Perform 5 such iterations (holistic analysis runs).
+Perform up to 5 such iterations (holistic analysis runs). If three consecutive
+iterations find no meaningful improvement, report that and stop early.
