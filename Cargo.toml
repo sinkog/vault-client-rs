@@ -1,3 +1,8 @@
+# vault-client-rs was created and is maintained by Michael S. Klishin.
+# Upstream: https://github.com/michaelklishin/vault-client-rs
+# This is a respectful fork adding only local quality-assurance tooling; all
+# credit for the library belongs to the original author and its contributors.
+
 [workspace]
 members = ["crates/*"]
 resolver = "3"
@@ -7,7 +12,9 @@ version = "0.9.0"
 edition = "2024"
 rust-version = "1.94"
 license = "Apache-2.0 OR MIT"
+# `repository` intentionally points at the upstream project.
 repository = "https://github.com/michaelklishin/vault-client-rs"
+authors = ["Michael S. Klishin and contributors"]
 
 [profile.dev]
 debug = "line-tables-only"
