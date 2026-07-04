@@ -36,7 +36,9 @@ async fn list_returns_the_response_keys() {
         .mount(&server)
         .await;
 
-    let keys = client(&server, 0).kv1("secret").list("app").await.unwrap();
+    // Call the arbitrary-path VaultClient::list directly (the KV handlers use a
+    // different helper, so this targets the generic list method).
+    let keys = client(&server, 0).list("secret/app").await.unwrap();
     // Pins the actual keys (guards `list` against returning an arbitrary Vec).
     assert_eq!(keys, vec!["alpha", "beta", "gamma"]);
 }
@@ -51,11 +53,8 @@ async fn delete_issues_a_delete_request() {
         .mount(&server)
         .await;
 
-    client(&server, 0)
-        .kv1("secret")
-        .delete("app")
-        .await
-        .unwrap();
+    // Call the arbitrary-path VaultClient::delete directly.
+    client(&server, 0).delete("secret/app").await.unwrap();
     // wiremock verifies the DELETE was actually sent on drop.
 }
 
