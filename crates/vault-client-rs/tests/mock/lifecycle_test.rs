@@ -300,3 +300,131 @@ async fn concurrent_requests_near_expiry_share_one_renewal() {
         handle.await.unwrap().unwrap();
     }
 }
+
+fn auth_body_renewable(
+    client_token: &str,
+    lease_duration: u64,
+    renewable: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "auth": {
+            "client_token": client_token, "accessor": "acc",
+            "policies": ["default"], "token_policies": ["default"], "metadata": null,
+            "lease_duration": lease_duration, "renewable": renewable,
+            "entity_id": "ent-1", "token_type": "service", "orphan": false,
+            "mfa_requirement": null, "num_uses": 0
+        }
+    })
+}
+
+// A non-renewable token near expiry must re-authenticate, NOT call renew-self
+// (guards the `ts.renewable` branch in ensure_valid_token).
+#[tokio::test]
+async fn non_renewable_token_near_expiry_re_authenticates_instead_of_renewing() {
+    let server = MockServer::start().await;
+
+    // First login: short-lived, NON-renewable token.
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/userpass/login/alice"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_body_renewable("s.initial", 2, false)),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    // renew-self must never be called for a non-renewable token.
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_body_renewable("s.renewed", 3600, true)),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    // Re-authentication (fresh login) is the correct path instead.
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/userpass/login/alice"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_body_renewable("s.reauth", 3600, true)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": {"key": "value"}})),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .max_retries(0)
+        .auth_method(UserpassLogin {
+            username: "alice".into(),
+            password: SecretString::from("password"),
+            mount: "userpass".into(),
+        })
+        .build()
+        .unwrap();
+
+    let _: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1850)).await;
+    let _: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+}
+
+// A healthy (not-near-expiry) token must not be renewed at all
+// (guards the `!token_needs_renewal` "Ok" branch).
+#[tokio::test]
+async fn healthy_token_is_not_renewed() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/userpass/login/alice"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_body_renewable("s.long", 7200, true)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    // A healthy token must never trigger renew-self.
+    Mock::given(method("POST"))
+        .and(path("/v1/auth/token/renew-self"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(auth_body_renewable("s.renewed", 7200, true)),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/secret/test"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"data": {"key": "value"}})),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let client = VaultClient::builder()
+        .address(&server.uri())
+        .max_retries(0)
+        .auth_method(UserpassLogin {
+            username: "alice".into(),
+            password: SecretString::from("password"),
+            mount: "userpass".into(),
+        })
+        .build()
+        .unwrap();
+
+    // First read logs in (long-lived token); second read sees a healthy token
+    // and must proceed without renewing.
+    let _: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+    let _: HashMap<String, String> = client.kv1("secret").read("test").await.unwrap();
+}
