@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Fork maintenance: this fork's `main` carries local quality-gate work that the
+# upstream (michaelklishin/vault-client-rs) does not want. To keep up with
+# upstream anyway, mirror upstream `main` to a branch and open a PR into our
+# `main` whenever upstream advances — so upstream changes are reviewed (and any
+# conflicts with the local changes resolved) rather than silently fast-forwarded.
+#
+# NB: this is NOT Renovate (which updates dependencies); it syncs upstream code.
+# It targets the ORIGINAL repo's main and opens a PR here, as requested.
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM: https://github.com/michaelklishin/vault-client-rs.git
+  UPSTREAM_BRANCH: main
+  SYNC_BRANCH: upstream-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open/refresh an upstream-sync PR when upstream main advances
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM" 2>/dev/null || git remote set-url upstream "$UPSTREAM"
+          git fetch --quiet upstream "$UPSTREAM_BRANCH"
+
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+            echo "Fork main already contains upstream/$UPSTREAM_BRANCH — nothing to sync."
+            exit 0
+          fi
+
+          # Mirror upstream main onto a fork branch; GitHub renders the diff (and
+          # any conflicts with our local changes) in the PR for manual review.
+          git push --force origin "refs/remotes/upstream/$UPSTREAM_BRANCH:refs/heads/$SYNC_BRANCH"
+
+          open=$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq 'length')
+          if [ "$open" = "0" ]; then
+            gh pr create --base "$UPSTREAM_BRANCH" --head "$SYNC_BRANCH" \
+              --title "Sync upstream: michaelklishin/vault-client-rs@$UPSTREAM_BRANCH" \
+              --body "Automated upstream sync. Upstream \`$UPSTREAM_BRANCH\` has advanced beyond this fork's \`$UPSTREAM_BRANCH\`. Review the diff — resolve any conflicts with the local quality-gate changes — before merging."
+          else
+            echo "An upstream-sync PR is already open (#$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')); branch refreshed."
+          fi
