@@ -1,5 +1,16 @@
 # A Rust Client for the HashiCorp Vault HTTP API
 
+> ### 🙏 Original author & upstream
+>
+> `vault-client-rs` was created and is maintained by **[Michael S. Klishin](https://github.com/michaelklishin)**.
+> All credit for the library belongs to the original author and its contributors.
+>
+> **Upstream repository:** **<https://github.com/michaelklishin/vault-client-rs>**
+>
+> This repository is a respectful fork that only adds local quality-assurance
+> tooling (build/CI gates, test coverage, mutation testing); please prefer and
+> support the upstream project. Licensed under Apache-2.0 OR MIT.
+
 Dual async and blocking Rust client for the [HashiCorp Vault](https://www.vaultproject.io/) HTTP API.
 
 Covers KV v1/v2, Transit, PKI, Database, SSH, Identity, TOTP, Cubbyhole,
