@@ -30,5 +30,8 @@ mod wrapping_test;
 #[cfg(feature = "blocking")]
 mod blocking_test;
 
+#[cfg(feature = "blocking")]
+mod blocking_review_test;
+
 #[cfg(feature = "auto-renew")]
 mod lease_watcher_test;

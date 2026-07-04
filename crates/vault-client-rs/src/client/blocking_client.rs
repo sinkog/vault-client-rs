@@ -9,6 +9,24 @@ use crate::circuit_breaker::CircuitBreakerConfig;
 use crate::types::error::VaultError;
 use crate::types::response::AuthInfo;
 
+/// A synchronous Vault client that wraps the async [`VaultClient`] with its own
+/// single-threaded Tokio runtime.
+///
+/// # Caveats
+///
+/// - **Do not call its methods from within an async context.** Each method
+///   drives its own runtime via `block_on`, and starting a runtime from within
+///   a runtime panics. Build it and use it from synchronous code (or a
+///   dedicated `std::thread`); in async code, use [`VaultClient`] with `.await`.
+/// - **Safe to share across threads** (`Send + Sync`), but calls are serialized
+///   on its single runtime thread — for parallel throughput, use multiple
+///   clients or the async client.
+/// - **No background renewal.** The background token/lease helpers
+///   (`start_token_renewal`, `watch_lease`, …) are not exposed here, because a
+///   single-threaded runtime only advances during a `block_on` call. Proactive
+///   per-request renewal still works; for background renewal, run it yourself.
+///
+/// [`VaultClient`]: super::VaultClient
 pub struct BlockingVaultClient {
     pub(crate) inner: super::VaultClient,
     pub(crate) rt: Arc<tokio::runtime::Runtime>,
