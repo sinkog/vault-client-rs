@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "timezone": "Europe/Budapest",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "Group all Cargo updates and prefix their commits.",
+      "matchManagers": ["cargo"],
+      "commitMessagePrefix": "deps:",
+      "groupName": "cargo dependencies"
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": false,
+    "_comment": "Cargo.lock is gitignored in this repo, so there is no lockfile to maintain."
+  }
+}
