@@ -31,6 +31,9 @@ This library is young. Before `1.0`, breaking API changes likely, including majo
  * Rust 1.93+
  * Tokio
 
+Tested against HashiCorp Vault **1.18** and **2.0.3** (the full integration
+suite passes against both). PKI ACME support requires Vault 1.14+.
+
 
 ## Dependency
 

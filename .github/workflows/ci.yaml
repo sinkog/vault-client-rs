@@ -47,7 +47,11 @@ jobs:
     name: Test
     strategy:
       matrix:
-        vault-version: ["1.18"]
+        # Vault versions the client is tested against. Renovate watches the
+        # highest entry (see renovate.json) and opens a PR when a newer Vault is
+        # released — the bump is then verified locally before merging.
+        # renovate: datasource=docker depName=hashicorp/vault versioning=docker
+        vault-version: ["1.18", "2.0"]
         rust-version: [stable, beta]
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
@@ -55,6 +59,8 @@ jobs:
     services:
       vault:
         image: hashicorp/vault:${{ matrix.vault-version }}
+        # Vault 2.0 dev containers need capability support to start.
+        options: --cap-add IPC_LOCK
         ports:
           - 8200:8200
         env:

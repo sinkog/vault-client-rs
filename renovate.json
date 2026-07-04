@@ -15,6 +15,27 @@
       "matchManagers": ["cargo"],
       "commitMessagePrefix": "deps:",
       "groupName": "cargo dependencies"
+    },
+    {
+      "description": "HashiCorp Vault version bumps: separate, labelled PR that must be verified locally (the integration suite needs a real Vault) before merging.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["hashicorp/vault"],
+      "groupName": "vault version",
+      "commitMessagePrefix": "vault:",
+      "labels": ["vault-version"],
+      "prBodyNotes": [
+        "⚠️ Verify locally against a real Vault before merging: run the full suite against this version (e.g. a throwaway `vault:<version>` dev container), since the integration tests exercise a live server."
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the highest HashiCorp Vault version pinned in the CI test matrix.",
+      "fileMatch": ["^\\.github/workflows/ci\\.yaml$"],
+      "matchStrings": [
+        "renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+vault-version:\\s*\\[[^\\]]*\"(?<currentValue>[0-9]+\\.[0-9]+)\"\\s*\\]"
+      ]
     }
   ],
   "lockFileMaintenance": {
