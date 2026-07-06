@@ -9,6 +9,10 @@ use wiremock::MockServer;
 
 pub use wiremock;
 
+/// Driver-level (trait) mocks — an alternative to the HTTP-layer WireMock
+/// helpers for unit-testing code generic over the operation traits.
+pub mod mock;
+
 /// Build a [`VaultClient`](vault_client_rs::VaultClient) pointed at `server`
 /// with a default test token and zero retries
 pub async fn test_client(server: &MockServer) -> vault_client_rs::VaultClient {

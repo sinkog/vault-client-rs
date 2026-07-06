@@ -160,13 +160,14 @@ jobs:
           exit 1
 
       # Line-coverage quality gate. The blocking mirror (a mechanical
-      # sync-over-async copy of the async API) and sys/mod.rs trait-delegation
-      # boilerplate are excluded; the remaining, meaningful code must stay at or
-      # above 90% lines. Keep the regex and floor in sync with the Makefile.
+      # sync-over-async copy of the async API), sys/mod.rs trait-delegation
+      # boilerplate, and the vault-client-rs-test tooling crate are excluded;
+      # the remaining, meaningful code must stay at or above 90% lines. Keep the
+      # regex and floor in sync with the Makefile.
       - name: Coverage (fail under 90% lines)
         run: |
           cargo llvm-cov nextest --all-features --workspace \
-            --ignore-filename-regex '(blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs)' \
+            --ignore-filename-regex '(blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs|vault-client-rs-test/)' \
             --fail-under-lines 90
 
   mutation:
