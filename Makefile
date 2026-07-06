@@ -17,7 +17,7 @@ RUST_COV_MIN ?= 90
 # sync-over-async mirror of the async API, and sys/mod.rs is trait-delegation
 # boilerplate (`self.x().await`) that exists only for mockability. Neither
 # carries logic worth asserting; measuring them only rewards rote tests.
-COV_IGNORE ?= (blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs)
+COV_IGNORE ?= (blocking/mod\.rs|client/blocking_client\.rs|api/sys/mod\.rs|vault-client-rs-test/)
 
 .PHONY: help up down build shell clean tools-install \
         fmt fmt-check lint test coverage coverage-check deny check release
