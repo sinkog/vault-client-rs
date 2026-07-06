@@ -21,7 +21,11 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use vault_client_rs::{
     AuthInfo, CertAuthOperations, CertRoleInfo, CertRoleRequest, Kv2Operations, KvConfig,
-    KvFullMetadata, KvMetadata, KvMetadataParams, KvReadResponse, VaultError,
+    KvFullMetadata, KvMetadata, KvMetadataParams, KvReadResponse, PkiAcmeConfig, PkiCertificate,
+    PkiCertificateEntry, PkiCrossSignRequest, PkiCsr, PkiImportResult, PkiIntermediateParams,
+    PkiIssueParams, PkiIssuedCert, PkiIssuerInfo, PkiIssuerUpdateParams, PkiOperations,
+    PkiRevocationInfo, PkiRole, PkiRoleParams, PkiRootParams, PkiSignParams, PkiSignedCert,
+    PkiTidyParams, PkiTidyStatus, PkiUrlsConfig, SecretString, VaultError,
 };
 
 /// A programmable error a mock can inject.
@@ -346,14 +350,229 @@ impl CertAuthOperations for MockCertAuth {
     }
 }
 
+// ---------------------------------------------------------------------------
+// MockPki
+// ---------------------------------------------------------------------------
+
+/// Builds a minimal [`PkiSignedCert`]-shaped JSON value for programming
+/// [`MockPki::with_signed`]. `ca_chain`'s first entry is reused as `issuing_ca`.
+#[must_use]
+pub fn pki_signed(certificate: &str, ca_chain: &[&str]) -> Value {
+    json!({
+        "certificate": certificate,
+        "issuing_ca": ca_chain.first().copied().unwrap_or(""),
+        "ca_chain": ca_chain,
+        "serial_number": "00:11:22:33",
+        "expiration": 0,
+    })
+}
+
+/// A programmable [`PkiOperations`] double, focused on the CA-signing path the
+/// countersign flow uses.
+///
+/// Program the `sign_verbatim` outcome with [`MockPki::with_signed`] (a
+/// [`pki_signed`] value) or [`MockPki::with_error`]. Other operations are
+/// unprogrammed; `sign_verbatim` on an empty mock reports [`VaultError::Api`].
+#[derive(Default)]
+pub struct MockPki {
+    sign_verbatim: Option<Result<Value, MockError>>,
+    calls: Mutex<Vec<(String, String)>>,
+}
+
+impl MockPki {
+    /// An empty mock — `sign_verbatim` errors until programmed.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Programs a successful `sign_verbatim` returning `signed` (see [`pki_signed`]).
+    #[must_use]
+    pub fn with_signed(mut self, signed: Value) -> Self {
+        self.sign_verbatim = Some(Ok(signed));
+        self
+    }
+
+    /// Programs a `sign_verbatim` error.
+    #[must_use]
+    pub fn with_error(mut self, err: MockError) -> Self {
+        self.sign_verbatim = Some(Err(err));
+        self
+    }
+
+    /// The `(role, csr)` pairs passed to `sign_verbatim`, in call order.
+    #[must_use]
+    pub fn calls(&self) -> Vec<(String, String)> {
+        self.calls.lock().expect("mock lock poisoned").clone()
+    }
+}
+
+impl PkiOperations for MockPki {
+    async fn sign_verbatim(&self, role: &str, csr: &str) -> Result<PkiSignedCert, VaultError> {
+        self.calls
+            .lock()
+            .expect("mock lock poisoned")
+            .push((role.to_owned(), csr.to_owned()));
+        match &self.sign_verbatim {
+            Some(Ok(v)) => serde_json::from_value(v.clone()).map_err(VaultError::Deserialize),
+            Some(Err(e)) => Err(e.to_vault("pki/sign-verbatim")),
+            None => Err(VaultError::Api {
+                status: 500,
+                errors: vec!["MockPki::sign_verbatim not programmed".to_owned()],
+            }),
+        }
+    }
+
+    async fn generate_root(&self, _params: &PkiRootParams) -> Result<PkiCertificate, VaultError> {
+        unimplemented!("MockPki::generate_root not programmed")
+    }
+
+    async fn generate_intermediate_csr(
+        &self,
+        _params: &PkiIntermediateParams,
+    ) -> Result<PkiCsr, VaultError> {
+        unimplemented!("MockPki::generate_intermediate_csr not programmed")
+    }
+
+    async fn set_signed_intermediate(
+        &self,
+        _certificate: &str,
+    ) -> Result<PkiImportResult, VaultError> {
+        unimplemented!("MockPki::set_signed_intermediate not programmed")
+    }
+
+    async fn delete_root(&self) -> Result<(), VaultError> {
+        unimplemented!("MockPki::delete_root not programmed")
+    }
+
+    async fn list_issuers(&self) -> Result<Vec<String>, VaultError> {
+        unimplemented!("MockPki::list_issuers not programmed")
+    }
+
+    async fn read_issuer(&self, _issuer_ref: &str) -> Result<PkiIssuerInfo, VaultError> {
+        unimplemented!("MockPki::read_issuer not programmed")
+    }
+
+    async fn update_issuer(
+        &self,
+        _issuer_ref: &str,
+        _params: &PkiIssuerUpdateParams,
+    ) -> Result<PkiIssuerInfo, VaultError> {
+        unimplemented!("MockPki::update_issuer not programmed")
+    }
+
+    async fn delete_issuer(&self, _issuer_ref: &str) -> Result<(), VaultError> {
+        unimplemented!("MockPki::delete_issuer not programmed")
+    }
+
+    async fn create_role(&self, _name: &str, _params: &PkiRoleParams) -> Result<(), VaultError> {
+        unimplemented!("MockPki::create_role not programmed")
+    }
+
+    async fn read_role(&self, _name: &str) -> Result<PkiRole, VaultError> {
+        unimplemented!("MockPki::read_role not programmed")
+    }
+
+    async fn list_roles(&self) -> Result<Vec<String>, VaultError> {
+        unimplemented!("MockPki::list_roles not programmed")
+    }
+
+    async fn delete_role(&self, _name: &str) -> Result<(), VaultError> {
+        unimplemented!("MockPki::delete_role not programmed")
+    }
+
+    async fn issue(
+        &self,
+        _role: &str,
+        _params: &PkiIssueParams,
+    ) -> Result<PkiIssuedCert, VaultError> {
+        unimplemented!("MockPki::issue not programmed")
+    }
+
+    async fn sign(
+        &self,
+        _role: &str,
+        _params: &PkiSignParams,
+    ) -> Result<PkiSignedCert, VaultError> {
+        unimplemented!("MockPki::sign not programmed")
+    }
+
+    async fn list_certs(&self) -> Result<Vec<String>, VaultError> {
+        unimplemented!("MockPki::list_certs not programmed")
+    }
+
+    async fn read_cert(&self, _serial: &str) -> Result<PkiCertificateEntry, VaultError> {
+        unimplemented!("MockPki::read_cert not programmed")
+    }
+
+    async fn set_urls(&self, _config: &PkiUrlsConfig) -> Result<(), VaultError> {
+        unimplemented!("MockPki::set_urls not programmed")
+    }
+
+    async fn read_urls(&self) -> Result<PkiUrlsConfig, VaultError> {
+        unimplemented!("MockPki::read_urls not programmed")
+    }
+
+    async fn revoke(&self, _serial: &str) -> Result<PkiRevocationInfo, VaultError> {
+        unimplemented!("MockPki::revoke not programmed")
+    }
+
+    async fn revoke_with_key(
+        &self,
+        _serial: &str,
+        _private_key: &SecretString,
+    ) -> Result<PkiRevocationInfo, VaultError> {
+        unimplemented!("MockPki::revoke_with_key not programmed")
+    }
+
+    async fn rotate_crl(&self) -> Result<(), VaultError> {
+        unimplemented!("MockPki::rotate_crl not programmed")
+    }
+
+    async fn tidy(&self, _params: &PkiTidyParams) -> Result<(), VaultError> {
+        unimplemented!("MockPki::tidy not programmed")
+    }
+
+    async fn tidy_status(&self) -> Result<PkiTidyStatus, VaultError> {
+        unimplemented!("MockPki::tidy_status not programmed")
+    }
+
+    async fn cross_sign_intermediate(
+        &self,
+        _params: &PkiCrossSignRequest,
+    ) -> Result<PkiCertificate, VaultError> {
+        unimplemented!("MockPki::cross_sign_intermediate not programmed")
+    }
+
+    async fn read_acme_config(&self) -> Result<PkiAcmeConfig, VaultError> {
+        unimplemented!("MockPki::read_acme_config not programmed")
+    }
+
+    async fn write_acme_config(&self, _config: &PkiAcmeConfig) -> Result<(), VaultError> {
+        unimplemented!("MockPki::write_acme_config not programmed")
+    }
+
+    async fn rotate_delta_crl(&self) -> Result<(), VaultError> {
+        unimplemented!("MockPki::rotate_delta_crl not programmed")
+    }
+
+    async fn read_crl(&self) -> Result<Vec<u8>, VaultError> {
+        unimplemented!("MockPki::read_crl not programmed")
+    }
+
+    async fn read_crl_delta(&self) -> Result<Vec<u8>, VaultError> {
+        unimplemented!("MockPki::read_crl_delta not programmed")
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MockCertAuth, MockError, MockKv2, auth_info};
+    use super::{MockCertAuth, MockError, MockKv2, MockPki, auth_info, pki_signed};
     use secrecy::ExposeSecret;
     use serde_json::json;
     use std::collections::HashMap;
     use std::future::Future;
-    use vault_client_rs::{CertAuthOperations, Kv2Operations, VaultError};
+    use vault_client_rs::{CertAuthOperations, Kv2Operations, PkiOperations, VaultError};
 
     fn block_on<F: Future>(f: F) -> F::Output {
         tokio::runtime::Builder::new_current_thread()
@@ -421,5 +640,34 @@ mod tests {
         let cert = MockCertAuth::new();
         let err = block_on(cert.login(Some("web"))).unwrap_err();
         assert!(matches!(err, VaultError::AuthRequired));
+    }
+
+    #[test]
+    fn pki_sign_verbatim_returns_programmed_cert() {
+        let pki = MockPki::new().with_signed(pki_signed(
+            "-----BEGIN CERTIFICATE-----\nLEAF\n-----END CERTIFICATE-----",
+            &["-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----"],
+        ));
+        let signed = block_on(pki.sign_verbatim("cic-module", "CSR")).expect("signed");
+        assert!(signed.certificate.contains("LEAF"));
+        assert_eq!(signed.ca_chain.len(), 1);
+        assert_eq!(
+            pki.calls(),
+            vec![("cic-module".to_owned(), "CSR".to_owned())]
+        );
+    }
+
+    #[test]
+    fn pki_sign_verbatim_programmed_error() {
+        let pki = MockPki::new().with_error(MockError::Denied);
+        let err = block_on(pki.sign_verbatim("cic-module", "CSR")).unwrap_err();
+        assert!(matches!(err, VaultError::PermissionDenied { .. }));
+    }
+
+    #[test]
+    fn pki_sign_verbatim_unprogrammed_is_api_error() {
+        let pki = MockPki::new();
+        let err = block_on(pki.sign_verbatim("cic-module", "CSR")).unwrap_err();
+        assert!(matches!(err, VaultError::Api { status: 500, .. }));
     }
 }
